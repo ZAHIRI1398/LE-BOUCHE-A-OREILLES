@@ -8,4 +8,3 @@ venv/
 .env
 .venv
 *.log
-.DS_Store
