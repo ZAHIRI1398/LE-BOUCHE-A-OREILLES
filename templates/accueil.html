@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accueil</title>
+    <title>Accueil - Restaurant Bouche à Oreille</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         /* Conteneur principal pour aligner les éléments horizontalement */
         .container {
@@ -12,59 +13,96 @@
             align-items: flex-start;
             flex-wrap: wrap;
             padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
         /* Conteneur pour les images et les étiquettes */
         .image-container {
             text-align: center;
-            margin: 10px;
+            margin: 15px;
             border: 2px solid #ddd;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            width: 300px;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 280px;
+            transition: transform 0.3s, box-shadow 0.3s;
+            background-color: white;
+        }
+
+        .image-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
         }
 
         /* Style pour les images */
         .image-container img {
             width: 100%;
-            height: auto;
-            border-radius: 5px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #eee;
         }
 
         /* Style pour les étiquettes (liens) sous les images */
         .image-container a {
             display: block;
             margin-top: 10px;
-            padding: 10px;
-            background-color: #f4f4f4;
-            border-radius: 5px;
-            color: #333;
+            padding: 12px;
+            background-color: #2c3e50;
+            border-radius: 6px;
+            color: white;
             text-decoration: none;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            font-weight: 500;
+            transition: background-color 0.3s;
         }
 
         /* Changer la couleur au survol des étiquettes */
         .image-container a:hover {
-            background-color: #ddd;
-            color: #000;
+            background-color: #1a252f;
+            color: white;
         }
 
         /* Centrer tout le contenu */
         body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 0;
+            margin: 0;
+            background-color: #f8f9fa;
         }
 
-        h1 {
+        .page-header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 40px;
             text-align: center;
-            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.5rem;
+        }
+
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <!-- Barre de navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand d-flex align-items-center" href="{{ url_for('accueil') }}">
                 <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" width="40" height="40" class="d-inline-block align-top me-2">
@@ -73,30 +111,44 @@
         </div>
     </nav>
 
-    <h1>Bienvenue chez Le Bouche à oreilles</h1>
+    <!-- En-tête de la page -->
+    <header class="page-header">
+        <div class="container">
+            <h1 class="page-title">Bienvenue au Restaurant Bouche à Oreille</h1>
+            <p class="page-subtitle">Découvrez une expérience culinaire exceptionnelle</p>
+        </div>
+    </header>
 
-    <!-- Conteneur principal pour afficher les images et les étiquettes horizontalement -->
+    <!-- Conteneur principal pour les cartes de fonctionnalités -->
     <div class="container">
-        <!-- Conteneur pour chaque image avec son étiquette -->
+        <!-- Carte pour voir les réservations -->
         <div class="image-container">
-            <img src="{{ url_for('static', filename='images/logo1.jpg') }}" alt="Image 1">
-            <a href="{{ url_for('afficher_toutes_reservations') }}">Voir les réservations</a>
+            <img src="{{ url_for('static', filename='images/logo1.jpg') }}" alt="Réservations">
+            <a href="{{ url_for('afficher_toutes_reservations') }}">
+                <i class="bi bi-calendar-check"></i> Voir les réservations
+            </a>
         </div>
 
+        <!-- Carte pour ajouter un plat -->
         <div class="image-container">
-            <img src="{{ url_for('static', filename='images/logo2.jpg') }}" alt="Image 2">
-            <a href="{{ url_for('ajouter_menu') }}">Ajouter un plat</a>
+            <img src="{{ url_for('static', filename='images/logo2.jpg') }}" alt="Ajouter un plat">
+            <a href="{{ url_for('ajouter_menu') }}">
+                <i class="bi bi-plus-circle"></i> Ajouter un plat
+            </a>
         </div>
 
+        <!-- Carte pour afficher le menu -->
         <div class="image-container">
-            <img src="{{ url_for('static', filename='images/logo3.jpg') }}" alt="Image 3">
-            <a href="{{ url_for('afficher_menu') }}">Afficher le menu du jour</a>
-        </div>
-
-        <div class="image-container">
-            <img src="{{ url_for('static', filename='images/logo4.jpg') }}" alt="Image 4">
-            <a href="{{ url_for('supprimer_reservations') }}" onclick="return confirm('Êtes-vous sûr de vouloir supprimer toutes les réservations ?')">Supprimer les réservations</a>
+            <img src="{{ url_for('static', filename='images/logo3.jpg') }}" alt="Menu du jour">
+            <a href="{{ url_for('afficher_menu') }}">
+                <i class="bi bi-book"></i> Afficher le menu
+            </a>
         </div>
     </div>
+
+    <!-- Scripts Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Icônes Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 </body>
 </html>
