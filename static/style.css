@@ -1,0 +1,66 @@
+/* Style global du body */
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+/* Styles pour les titres h1 et h2 */
+h1, h2 {
+    color: #9811ec;
+}
+
+/* Styles pour les liens */
+a {
+    display: block;
+    margin-bottom: 10px;
+    color: #1a7ce4;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Style pour les formulaires */
+form {
+    margin-top: 20px;
+}
+
+/* Style pour les labels */
+label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+/* Style pour les champs texte et nombre */
+input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    box-sizing: border-box; /* S'assure que le padding n'augmente pas la taille des champs */
+}
+
+/* Bouton valider */
+.btn-valider {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    font-size: 16px; /* Taille du texte légèrement plus grande */
+}
+
+.btn-valider:hover {
+    background-color: #45a049;
+}
+
+/* Style pour les divs avec bordure */
+.div-border {
+    border: 1px solid #ccc;
+    padding: 20px;
+    border-radius: 5px; /* Ajout d'un léger arrondi aux bords */
+    background-color: #f9f9f9; /* Fond légèrement gris */
+}
+.inline-form {
+    display: inline;
+}

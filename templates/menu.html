@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Menu</title>
+
+    </head>
+
+  <body>
+    <h1>Menu du jour</h1>
+    <ul>
+      {% for plat in plats %}
+      <li>
+        {{ plat[1] }} - {{ plat[2] }} - {{ plat[3] }}€
+        <!-- Formulaire pour supprimer un plat -->
+        <form
+          action="{{ url_for('supprimer_plat', plat_id=plat[0]) }}"
+          method="post"
+          class="inline-form"
+        >
+          <button type="submit">Supprimer</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    <a href="{{ url_for('accueil') }}">Retour à l'accueil</a>
+  </body>
+</html>

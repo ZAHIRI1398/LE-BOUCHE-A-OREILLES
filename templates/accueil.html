@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accueil</title>
+    <style>
+        /* Conteneur principal pour aligner les éléments horizontalement */
+        .container {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            padding: 20px;
+        }
+
+        /* Conteneur pour les images et les étiquettes */
+        .image-container {
+            text-align: center;
+            margin: 10px;
+            border: 2px solid #ddd;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        /* Style pour les images */
+        .image-container img {
+            width: 100%;
+            height: auto;
+            border-radius: 5px;
+        }
+
+        /* Style pour les étiquettes (liens) sous les images */
+        .image-container a {
+            display: block;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f4f4f4;
+            border-radius: 5px;
+            color: #333;
+            text-decoration: none;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Changer la couleur au survol des étiquettes */
+        .image-container a:hover {
+            background-color: #ddd;
+            color: #000;
+        }
+
+        /* Centrer tout le contenu */
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('accueil') }}">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" width="40" height="40" class="d-inline-block align-top me-2">
+                <span>Bouche à Oreille</span>
+            </a>
+        </div>
+    </nav>
+
+    <h1>Bienvenue chez Le Bouche à oreilles</h1>
+
+    <!-- Conteneur principal pour afficher les images et les étiquettes horizontalement -->
+    <div class="container">
+        <!-- Conteneur pour chaque image avec son étiquette -->
+        <div class="image-container">
+            <img src="{{ url_for('static', filename='images/logo1.jpg') }}" alt="Image 1">
+            <a href="{{ url_for('afficher_toutes_reservations') }}">Voir les réservations</a>
+        </div>
+
+        <div class="image-container">
+            <img src="{{ url_for('static', filename='images/logo2.jpg') }}" alt="Image 2">
+            <a href="{{ url_for('ajouter_menu') }}">Ajouter un plat</a>
+        </div>
+
+        <div class="image-container">
+            <img src="{{ url_for('static', filename='images/logo3.jpg') }}" alt="Image 3">
+            <a href="{{ url_for('afficher_menu') }}">Afficher le menu du jour</a>
+        </div>
+
+        <div class="image-container">
+            <img src="{{ url_for('static', filename='images/logo4.jpg') }}" alt="Image 4">
+            <a href="{{ url_for('supprimer_reservations') }}" onclick="return confirm('Êtes-vous sûr de vouloir supprimer toutes les réservations ?')">Supprimer les réservations</a>
+        </div>
+    </div>
+</body>
+</html>

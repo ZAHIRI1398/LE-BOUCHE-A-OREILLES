@@ -1,0 +1,23 @@
+<!-- ajouter-menu.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajouter un Plat</title>
+</head>
+<body>
+    <h1>Ajouter un Plat</h1>
+    <form action="{{ url_for('ajouter_plat') }}" method="post">
+        <!-- Champs du formulaire pour ajouter un plat -->
+        <input type="text" name="nom_plat" placeholder="Nom du Plat">
+        <input type="text" name="description" placeholder="Description">
+        <input type="text" name="prix" placeholder="Prix">
+        <button type="submit">Ajouter Plat</button>
+    </form>
+    <a href="{{ url_for('accueil') }}">Retour à l'accueil</a>
+   
+
+
+</body>
+</html>
