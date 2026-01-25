@@ -75,7 +75,7 @@ with app.app_context():
 
 @app.route('/')
 def accueil():
-    return render_template('accueil.html', today=datetime.date.today().isoformat())
+    return redirect(url_for('reservation.reserver'))
 
 @app.route('/afficher_reservations')
 def afficher_toutes_reservations():

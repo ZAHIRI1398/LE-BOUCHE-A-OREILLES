@@ -73,7 +73,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-@reservation_bp.route('/reserver', methods=['GET'])
+@reservation_bp.route('/reserver')
 def reserver():
     return render_template('reservation_form.html')
 
