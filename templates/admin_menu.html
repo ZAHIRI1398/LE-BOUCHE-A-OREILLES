@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Gestion du Menu - Admin{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Gestion du Menu</h1>
+        <a href="{{ url_for('ajouter_plat') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Ajouter un plat
+        </a>
+    </div>
+
+    {% for categorie, plats in menu_par_categorie.items() %}
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h2 class="h5 mb-0">{{ categorie }}</h2>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nom</th>
+                            <th>Description</th>
+                            <th class="text-end">Prix</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for plat in plats %}
+                        <tr>
+                            <td class="align-middle">
+                                <div class="d-flex align-items-center">
+                                    <img src="{{ url_for('static', filename='images/logo' ~ (loop.index % 4 + 1) ~ '.jpg') }}" 
+                                         alt="{{ plat.nom }}" 
+                                         class="rounded me-3"
+                                         style="width: 50px; height: 50px; object-fit: cover;">
+                                    <span>{{ plat.nom }}</span>
+                                </div>
+                            </td>
+                            <td class="align-middle">{{ plat.description }}</td>
+                            <td class="align-middle text-end">{{ "%.2f"|format(plat.prix) }} €</td>
+                            <td class="align-middle text-end">
+                                <div class="btn-group">
+                                    <a href="#" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form action="{{ url_for('supprimer_plat', plat_id=plat.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce plat ?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

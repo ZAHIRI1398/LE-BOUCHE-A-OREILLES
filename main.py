@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 import sqlite3
 import logging
 from reservation_client import reservation_bp
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = 'votre_cle_secrète_plus_secrete_encore_123456'
@@ -66,6 +67,74 @@ def creer_tables():
             app.logger.info("Tables créées avec succès.")
     except sqlite3.Error as e:
         app.logger.error(f"Erreur lors de la création des tables: {e}")
+ # Configuration de l'admin
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "password123"  # À changer en production
+
+# Protection des routes admin
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Route de connexion admin
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            return redirect(url_for('afficher_toutes_reservations'))
+        else:
+            flash('Identifiants incorrects', 'danger')
+    return render_template('admin_login.html')
+
+# Route de déconnexion admin
+@app.route('/admin/logout')
+@login_required
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    flash('Vous avez été déconnecté avec succès.', 'success')
+    return redirect(url_for('accueil'))    
+
+# Exemple de route protégée
+@app.route('/admin/reservations')
+@login_required
+def afficher_toutes_reservations():
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT r.*, GROUP_CONCAT(m.nom, ', ') as plats
+            FROM reservations r
+            LEFT JOIN reservations_plats rp ON r.id = rp.reservation_id
+            LEFT JOIN menu m ON rp.plat_id = m.id
+            GROUP BY r.id
+            ORDER BY r.date DESC, r.heure DESC
+        ''')
+        reservations = cursor.fetchall()
+        
+        # Convert to list of dicts for template
+        reservations_list = []
+        for row in reservations:
+            res = dict(row)
+            # Convert Row to dict and handle any necessary type conversions
+            res['plats'] = res.get('plats', '').split(', ') if res.get('plats') else []
+            reservations_list.append(res)
+            
+        return render_template('admin_reservations.html', 
+                             reservations=reservations_list,
+                             email=None)
+    except sqlite3.Error as e:
+        app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
+        flash("Une erreur est survenue lors de la récupération des réservations.", "error")
+        return redirect(url_for('accueil'))
+    finally:
+        conn.close()
 
 # Créer les tables au démarrage
 with app.app_context():
@@ -75,48 +144,24 @@ with app.app_context():
 
 @app.route('/')
 def accueil():
-    return redirect(url_for('reservation.reserver'))
+    return redirect(url_for('page_accueil'))
 
-@app.route('/afficher_reservations')
-def afficher_toutes_reservations():
-    conn = get_db_connection()
-    try:
-        # Récupérer toutes les réservations avec les colonnes nommées
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM reservations 
-            ORDER BY date DESC, heure DESC
-        ''')
-        reservations = [dict(row) for row in cursor.fetchall()]
-        
-        # Récupérer les plats pour chaque réservation
-        for reservation in reservations:
-            cursor.execute('''
-                SELECT m.nom, m.description, m.prix 
-                FROM reservations_plats rp
-                JOIN menu m ON rp.plat_id = m.id
-                WHERE rp.reservation_id = ?
-            ''', (reservation['id'],))
-            plats = [dict(row) for row in cursor.fetchall()]
-            reservation['plats'] = plats
-            
-    except sqlite3.Error as e:
-        app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
-        flash("Une erreur est survenue lors de la récupération des réservations.", "error")
-        return redirect(url_for('accueil'))
-    finally:
-        conn.close()
-    
-    return render_template('afficher_reservations.html', 
-                         reservations=reservations,
-                         email=None)
+@app.route('/accueil')
+def page_accueil():
+    return render_template('accueil.html', today=datetime.date.today().isoformat())
 
 @app.route('/ajouter_menu')
 def ajouter_menu():
     return render_template('ajouter-menu.html')
 
-@app.route('/ajouter_plat', methods=['POST'])
+@app.route('/admin/ajouter_plat')
+@login_required
 def ajouter_plat():
+    return render_template('ajouter-menu.html')
+
+@app.route('/admin/ajouter_plat_action', methods=['POST'])
+@login_required
+def admin_ajouter_plat_action():
     if request.method == 'POST':
         nom_plat = request.form.get('nom_plat')
         description = request.form.get('description')
@@ -132,13 +177,13 @@ def ajouter_plat():
             )
             conn.commit()
             flash('Plat ajouté avec succès!', 'success')
-            return redirect(url_for('afficher_menu'))
+            return redirect(url_for('menu'))
         except Exception as e:
             flash(f'Erreur lors de l\'ajout du plat: {str(e)}', 'error')
-            return redirect(url_for('ajouter_menu'))
+            return redirect(url_for('ajouter_plat'))
         finally:
             conn.close()
-    return redirect(url_for('ajouter_menu'))
+    return redirect(url_for('ajouter_plat'))
 
 @app.route('/changer_statut/<int:id>', methods=['POST'])
 def changer_statut(id):
@@ -169,7 +214,8 @@ def changer_statut(id):
     return redirect(url_for('afficher_toutes_reservations'))
 
 @app.route('/menu')
-def afficher_menu():
+@app.route('/carte')
+def menu():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -182,14 +228,49 @@ def afficher_menu():
             categorie = plat['categorie'] or 'Autres'
             if categorie not in menu_par_categorie:
                 menu_par_categorie[categorie] = []
-            menu_par_categorie[categorie].append(plat)
+            menu_par_categorie[categorie].append(dict(plat))
             
-        return render_template('menu.html', menu_par_categorie=menu_par_categorie)
+        # Si l'utilisateur est admin, on affiche la vue admin
+        if session.get('admin_logged_in'):
+            return render_template('admin_menu.html', 
+                                menu_par_categorie=menu_par_categorie)
+        # Sinon, on affiche la vue client
+        return render_template('menu.html', 
+                            menu_par_categorie=menu_par_categorie)
     except Exception as e:
-        flash(f'Erreur lors de la récupération du menu: {str(e)}', 'error')
+        app.logger.error(f"Erreur dans la route menu: {str(e)}")
+        flash('Une erreur est survenue lors du chargement du menu.', 'error')
         return redirect(url_for('accueil'))
     finally:
-        conn.close()
+        if 'conn' in locals():
+            conn.close()
+
+@app.route('/admin/menu')
+@login_required
+def admin_menu():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM menu ORDER BY categorie, nom')
+        plats = cursor.fetchall()
+        
+        # Grouper les plats par catégorie
+        menu_par_categorie = {}
+        for plat in plats:
+            categorie = plat['categorie'] or 'Autres'
+            if categorie not in menu_par_categorie:
+                menu_par_categorie[categorie] = []
+            menu_par_categorie[categorie].append(dict(plat))
+            
+        return render_template('admin_menu.html', 
+                            menu_par_categorie=menu_par_categorie)
+    except Exception as e:
+        app.logger.error(f"Erreur dans la route menu admin: {str(e)}")
+        flash('Une erreur est survenue lors du chargement du menu.', 'error')
+        return redirect(url_for('accueil'))
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 @app.route('/supprimer_plat/<int:plat_id>', methods=['POST'])
 def supprimer_plat(plat_id):
@@ -203,7 +284,7 @@ def supprimer_plat(plat_id):
         flash(f'Erreur lors de la suppression du plat: {str(e)}', 'error')
     finally:
         conn.close()
-    return redirect(url_for('afficher_menu'))
+    return redirect(url_for('menu'))
 
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0',port=5000)

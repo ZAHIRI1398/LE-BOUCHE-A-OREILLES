@@ -1,0 +1,24 @@
+<!-- templates/404.html -->
+{% extends "base.html" %}
+{% block title %}Page non trouvée - BOUCHE A OREILLE{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+            <div class="error-template">
+                <h1>Oups !</h1>
+                <h2>404 Page non trouvée</h2>
+                <div class="error-details my-4">
+                    <p>Désolé, la page que vous recherchez est introuvable ou n'existe plus.</p>
+                </div>
+                <div class="error-actions">
+                    <a href="{{ url_for('accueil') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-home me-2"></i>Retour à l'accueil
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

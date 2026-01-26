@@ -1,174 +1,50 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notre Carte - Restaurant Bouche à Oreille</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <style>
-        body {
-            background-color: #f8f9fa;
-            padding-bottom: 50px;
-        }
-        .menu-header {
-            background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/static/images/restaurant-bg.jpg');
-            background-size: cover;
-            background-position: center;
-            color: white;
-            padding: 80px 0;
-            margin-bottom: 40px;
-            text-align: center;
-        }
-        .menu-section {
-            margin-bottom: 50px;
-        }
-        .section-title {
-            color: #2c3e50;
-            margin-bottom: 25px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e9ecef;
-            position: relative;
-        }
-        .section-title:after {
-            content: '';
-            position: absolute;
-            left: 0;
-            bottom: -2px;
-            width: 100px;
-            height: 2px;
-            background-color: #d4af37;
-        }
-        .card {
-            border: none;
-            border-radius: 10px;
-            transition: transform 0.3s, box-shadow 0.3s;
-            margin-bottom: 20px;
-            height: 100%;
-        }
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-        .card-body {
-            padding: 20px;
-        }
-        .plat-title {
-            color: #2c3e50;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-        .plat-description {
-            color: #6c757d;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
-        }
-        .plat-price {
-            color: #d4af37;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-        .btn-add {
-            background-color: #2c3e50;
-            border: none;
-            padding: 10px 20px;
-            font-weight: 500;
-        }
-        .btn-add:hover {
-            background-color: #1a252f;
-        }
-        .btn-delete {
-            color: #dc3545;
-            background: none;
-            border: none;
-            padding: 0;
-            cursor: pointer;
-        }
-        .btn-delete:hover {
-            color: #bb2d3b;
-        }
-        .no-plats {
-            color: #6c757d;
-            font-style: italic;
-            text-align: center;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-        }
-    </style>
-</head>
-<body>
-    <!-- En-tête avec image de fond -->
-    <header class="menu-header">
-        <div class="container">
-            <div class="d-flex justify-content-between align-items-center">
-                <h1 class="display-4 fw-bold mb-0">Notre Carte</h1>
-                <a href="{{ url_for('accueil') }}" class="btn btn-outline-light">
-                    <i class="bi bi-arrow-left"></i> Retour à l'accueil
-                </a>
-            </div>
-            <p class="lead">Découvrez nos délicieuses spécialités préparées avec des ingrédients frais</p>
-        </div>
-    </header>
+<!-- templates/menu.html -->
+{% extends "base.html" %}
+{% block title %}Notre Carte - LE BOUCHE À OREILLES{% endblock %}
 
-    <div class="container">
-        <!-- Bouton d'ajout de plat (visible uniquement pour l'admin) -->
-        <div class="text-end mb-4">
-            <a href="{{ url_for('ajouter_menu') }}" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> Ajouter un plat
-            </a>
-        </div>
-
-        <!-- Affichage des plats par catégorie -->
-        {% if menu_par_categorie %}
-            {% for categorie, plats in menu_par_categorie.items() %}
-                <div class="menu-section">
-                    <h2 class="section-title">
-                        {% if categorie == 'entree' %}Entrées
-                        {% elif categorie == 'plat_principal' %}Plats Principaux
-                        {% elif categorie == 'dessert' %}Desserts
-                        {% elif categorie == 'boisson' %}Boissons
-                        {% else %}{{ categorie|title }}{% endif %}
-                    </h2>
-                    
-                    <div class="row">
-                        {% for plat in plats %}
-                            <div class="col-md-6 col-lg-4">
-                                <div class="card h-100">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between">
-                                            <h5 class="plat-title">{{ plat['nom'] }}</h5>
-                                            <span class="plat-price">{{ "%.2f"|format(plat['prix']) }} €</span>
-                                        </div>
-                                        <p class="plat-description">{{ plat['description'] }}</p>
-                                        
-                                        <!-- Bouton de suppression (visible uniquement pour l'admin) -->
-                                        <div class="text-end">
-                                            <form action="{{ url_for('supprimer_plat', plat_id=plat['id']) }}" method="post" class="d-inline">
-                                                <button type="submit" class="btn btn-delete" onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce plat ?')">
-                                                    <i class="bi bi-trash"></i> Supprimer
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endfor %}
-        {% else %}
-            <div class="alert alert-info">Aucun plat n'est disponible pour le moment.</div>
-        {% endif %}
-        
-        <!-- Bouton de retour en bas de page -->
-        <div class="text-center mt-5">
-            <a href="{{ url_for('accueil') }}" class="btn btn-outline-primary">
-                <i class="bi bi-house-door"></i> Retour à l'accueil
-            </a>
-        </div>
+{% block content %}
+<div class="container my-5">
+    <div class="text-center mb-5">
+        <h1>Notre Carte</h1>
+        <p class="lead">Découvrez nos délicieuses spécialités</p>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    {% for categorie, plats in menu_par_categorie.items() %}
+    <div class="mb-5">
+        <h2 class="border-bottom pb-2 mb-4">{{ categorie }}</h2>
+        <div class="row">
+            {% for plat in plats %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100">
+                    {% if 'Pates' in plat.nom %}
+                    <img src="{{ url_for('static', filename='images/plat1.jpg') }}" 
+                         class="card-img-top" 
+                         alt="{{ plat.nom }}"
+                         style="height: 200px; object-fit: cover;">
+                    {% elif 'Couscous' in plat.nom %}
+                    <img src="{{ url_for('static', filename='images/plat2.jpg') }}" 
+                         class="card-img-top" 
+                         alt="{{ plat.nom }}"
+                         style="height: 200px; object-fit: cover;">
+                    {% else %}
+                    <img src="{{ url_for('static', filename='images/logo' ~ (loop.index % 4 + 1) ~ '.jpg') }}" 
+                         class="card-img-top" 
+                         alt="{{ plat.nom }}"
+                         style="height: 200px; object-fit: cover;">
+                    {% endif %}
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h5 class="card-title mb-1" style="font-size: 0.9rem;">{{ plat.nom }}</h5>
+                            <span class="badge bg-primary" style="font-size: 0.8rem;">{{ "%.2f"|format(plat.prix) }} €</span>
+                        </div>
+                        <p class="card-text text-muted" style="font-size: 0.8rem; margin-bottom: 0.25rem;">{{ plat.description }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+{% endblock %}
