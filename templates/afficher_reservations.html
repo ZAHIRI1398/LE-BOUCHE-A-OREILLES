@@ -30,24 +30,34 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Exemple de ligne de réservation -->
+                        {% for reservation in reservations %}
                         <tr>
-                            <td>1</td>
-                            <td>Dupont Jean</td>
-                            <td>2024-06-15</td>
-                            <td>20:00</td>
-                            <td>4</td>
-                            <td><span class="badge bg-warning">En attente</span></td>
+                            <td>{{ reservation.id }}</td>
+                            <td>{{ reservation.nom }}</td>
+                            <td>{{ reservation.date }}</td>
+                            <td>{{ reservation.heure }}</td>
+                            <td>{{ reservation.personnes }}</td>
                             <td>
-                                <button class="btn btn-sm btn-success me-1">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                                <button class="btn btn-sm btn-danger">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                                {% if reservation.statut == 'confirmée' %}
+                                    <span class="badge bg-success">Confirmée</span>
+                                {% else %}
+                                    <span class="badge bg-warning">En attente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form action="{{ url_for('changer_statut', id=reservation.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success me-1" title="Confirmer">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('supprimer_reservation', id=reservation.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette réservation ?');">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Supprimer">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
-                        <!-- Ajoutez plus de lignes ici dynamiquement -->
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>

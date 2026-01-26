@@ -31,10 +31,11 @@
                         <tr>
                             <td class="align-middle">
                                 <div class="d-flex align-items-center">
-                                    <img src="{{ url_for('static', filename='images/logo' ~ (loop.index % 4 + 1) ~ '.jpg') }}" 
+                                    <img src="{{ url_for('static', filename='images/plat' ~ (loop.index0 % 4) ~ '.jpg') }}" 
                                          alt="{{ plat.nom }}" 
                                          class="rounded me-3"
-                                         style="width: 50px; height: 50px; object-fit: cover;">
+                                         style="width: 50px; height: 50px; object-fit: cover;"
+                                         onerror="this.onerror=null; this.src='{{ url_for('static', filename='images/logo1.jpg') }}';">
                                     <span>{{ plat.nom }}</span>
                                 </div>
                             </td>

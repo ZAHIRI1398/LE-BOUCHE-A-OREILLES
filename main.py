@@ -286,5 +286,22 @@ def supprimer_plat(plat_id):
         conn.close()
     return redirect(url_for('menu'))
 
+@app.route('/admin/reservation/supprimer/<int:id>', methods=['POST'])
+@login_required
+def supprimer_reservation(id):
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # Supprimer d'abord les entrées liées dans la table de liaison
+            cursor.execute('DELETE FROM reservations_plats WHERE reservation_id = ?', (id,))
+            # Puis supprimer la réservation
+            cursor.execute('DELETE FROM reservations WHERE id = ?', (id,))
+            conn.commit()
+            flash('La réservation a été supprimée avec succès.', 'success')
+    except Exception as e:
+        flash(f'Une erreur est survenue lors de la suppression de la réservation : {str(e)}', 'error')
+    
+    return redirect(url_for('afficher_toutes_reservations'))
+
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0',port=5000)

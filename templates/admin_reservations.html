@@ -19,41 +19,12 @@
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0,0,0,0.1);
         }
-        .status-pending {
-            background-color: #fff3cd;
-            color: #856404;
+        .table th {
+            white-space: nowrap;
         }
-        .status-confirmed {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .status-cancelled {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .reservation-card {
-            transition: transform 0.2s;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .reservation-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        .reservation-header {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-        }
-        .reservation-body {
-            padding: 15px;
-        }
-        .reservation-footer {
-            padding: 10px 15px;
-            background-color: #f8f9fa;
-            border-top: 1px solid #eee;
-            text-align: right;
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
         }
     </style>
 </head>
@@ -67,11 +38,15 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" href="{{ url_for('reservation.admin_reservations') }}">Réservations</a>
+                        <a class="nav-link active" href="{{ url_for('afficher_toutes_reservations') }}">Réservations</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_menu') }}">Menu</a>
                     </li>
                 </ul>
                 <div class="d-flex">
-                    <a href="{{ url_for('accueil') }}" class="btn btn-outline-light">Retour au site</a>
+                    <a href="{{ url_for('accueil') }}" class="btn btn-outline-light me-2">Retour au site</a>
+                    <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger">Déconnexion</a>
                 </div>
             </div>
         </div>
@@ -84,10 +59,10 @@
                 <div>
                     <span class="me-2">Filtrer :</span>
                     <div class="btn-group" role="group">
-                        <a href="{{ url_for('reservation.admin_reservations') }}" class="btn btn-outline-secondary">Toutes</a>
-                        <a href="{{ url_for('reservation.admin_reservations', statut='en_attente') }}" class="btn btn-outline-warning">En attente</a>
-                        <a href="{{ url_for('reservation.admin_reservations', statut='confirmee') }}" class="btn btn-outline-success">Confirmées</a>
-                        <a href="{{ url_for('reservation.admin_reservations', statut='annulee') }}" class="btn btn-outline-danger">Annulées</a>
+                        <a href="{{ url_for('afficher_toutes_reservations') }}" class="btn btn-outline-secondary">Toutes</a>
+                        <a href="{{ url_for('afficher_toutes_reservations', statut='en_attente') }}" class="btn btn-outline-warning">En attente</a>
+                        <a href="{{ url_for('afficher_toutes_reservations', statut='confirmee') }}" class="btn btn-outline-success">Confirmées</a>
+                        <a href="{{ url_for('afficher_toutes_reservations', statut='annulee') }}" class="btn btn-outline-danger">Annulées</a>
                     </div>
                 </div>
             </div>
@@ -97,68 +72,88 @@
                     {% for category, message in messages %}
                         <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                             {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     {% endfor %}
                 {% endif %}
             {% endwith %}
 
-            <div class="row">
-                {% for reservation in reservations %}
-                <div class="col-md-6 col-lg-4">
-                    <div class="reservation-card">
-                        <div class="reservation-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">#{{ reservation['reference'] }}</h5>
-                            <span class="badge bg-{{ 'success' if reservation['statut'] == 'confirmee' else 'warning' if reservation['statut'] == 'en_attente' else 'danger' }}">
-                                {{ reservation['statut']|replace('_', ' ')|title }}
-                            </span>
-                        </div>
-                        <div class="reservation-body">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span><strong>Date :</strong> {{ reservation['date'] }}</span>
-                                <span><strong>Heure :</strong> {{ reservation['heure'] }}</span>
-                            </div>
-                            <p class="mb-1"><strong>Client :</strong> {{ reservation['nom'] }}</p>
-                            <p class="mb-1"><strong>Personnes :</strong> {{ reservation['personnes'] }}</p>
-                            <p class="mb-1"><i class="bi bi-telephone"></i> {{ reservation['telephone'] }}</p>
-                            <p class="mb-1 text-truncate" title="{{ reservation['email'] }}">
-                                <i class="bi bi-envelope"></i> {{ reservation['email'] }}
-                            </p>
-                            {% if reservation['message'] %}
-                                <div class="alert alert-light p-2 mt-2 mb-0">
-                                    <small><i class="bi bi-chat-quote"></i> {{ reservation['message'] }}</small>
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="reservation-footer">
-                            <div class="btn-group btn-group-sm">
-                                {% if reservation['statut'] == 'en_attente' %}
-                                    <form action="{{ url_for('reservation.changer_statut', id=reservation['id']) }}" method="post" class="d-inline">
-                                        <input type="hidden" name="nouveau_statut" value="confirmee">
-                                        <button type="submit" class="btn btn-success btn-sm">
-                                            <i class="bi bi-check-lg"></i> Confirmer
-                                        </button>
-                                    </form>
-                                    <form action="{{ url_for('reservation.changer_statut', id=reservation['id']) }}" method="post" class="d-inline ms-1">
-                                        <input type="hidden" name="nouveau_statut" value="annulee">
-                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')">
-                                            <i class="bi bi-x-lg"></i> Annuler
-                                        </button>
-                                    </form>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Nom</th>
+                            <th>Email</th>
+                            <th>Téléphone</th>
+                            <th>Date</th>
+                            <th>Heure</th>
+                            <th>Personnes</th>
+                            <th>Statut</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reservation in reservations %}
+                        <tr>
+                            <td>{{ reservation.id }}</td>
+                            <td>{{ reservation.nom }}</td>
+                            <td>{{ reservation.email }}</td>
+                            <td>{{ reservation.telephone or '-' }}</td>
+                            <td>{{ reservation.date }}</td>
+                            <td>{{ reservation.heure }}</td>
+                            <td>{{ reservation.personnes }}</td>
+                            <td>
+                                {% if reservation.statut == 'confirmee' %}
+                                    <span class="badge bg-success">Confirmée</span>
+                                {% elif reservation.statut == 'annulee' %}
+                                    <span class="badge bg-danger">Annulée</span>
                                 {% else %}
-                                    <span class="badge bg-{{ 'success' if reservation['statut'] == 'confirmee' else 'danger' }}">
-                                        {{ 'Confirmée' if reservation['statut'] == 'confirmee' else 'Annulée' }}
-                                    </span>
+                                    <span class="badge bg-warning">En attente</span>
                                 {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% else %}
-                <div class="col-12">
-                    <div class="alert alert-info">Aucune réservation trouvée.</div>
-                </div>
-                {% endfor %}
+                            </td>
+                            <td class="d-flex">
+                                {% if reservation.statut != 'confirmee' %}
+                                <form action="{{ url_for('changer_statut', id=reservation.id) }}" method="POST" class="me-1">
+                                    <input type="hidden" name="nouveau_statut" value="confirmee">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Confirmer">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                {% if reservation.statut != 'annulee' %}
+                                <form action="{{ url_for('changer_statut', id=reservation.id) }}" method="POST" class="me-1">
+                                    <input type="hidden" name="nouveau_statut" value="annulee">
+                                    <button type="submit" class="btn btn-sm btn-warning" title="Annuler" 
+                                        onclick="return confirm('Êtes-vous sûr de vouloir annuler cette réservation ?');">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <form action="{{ url_for('supprimer_reservation', id=reservation.id) }}" method="POST" 
+                                    onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette réservation ?');">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Supprimer">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% if reservation.message %}
+                        <tr>
+                            <td colspan="9" class="small text-muted">
+                                <strong>Message :</strong> {{ reservation.message }}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4">
+                                <div class="alert alert-info mb-0">Aucune réservation trouvée.</div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
