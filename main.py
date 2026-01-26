@@ -303,5 +303,87 @@ def supprimer_reservation(id):
     
     return redirect(url_for('afficher_toutes_reservations'))
 
+import random
+import string
+
+def generate_reference():
+    """Generate a unique reference for reservations"""
+    chars = string.ascii_uppercase + string.digits
+    return 'RES-' + ''.join(random.choices(chars, k=8))
+
+@app.route('/reserver', methods=['GET', 'POST'])
+def reserver():
+    if request.method == 'POST':
+        try:
+            # Get form data
+            nom = request.form.get('nom')
+            email = request.form.get('email')
+            telephone = request.form.get('telephone')
+            personnes = int(request.form.get('personnes', 1))
+            date = request.form.get('date')
+            heure = request.form.get('heure')
+            message = request.form.get('message', '')
+            
+            # Generate a unique reference
+            reference = generate_reference()
+            
+            # Save to database
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO reservations 
+                (reference, nom, email, telephone, date, heure, personnes, message, statut)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'en_attente')
+                ''',
+                (reference, nom, email, telephone, date, heure, personnes, message)
+            )
+            conn.commit()
+            conn.close()
+            
+            flash('Votre réservation a été enregistrée avec succès!', 'success')
+            return redirect(url_for('confirmation', reference=reference))
+            
+        except Exception as e:
+            app.logger.error(f"Erreur lors de l'enregistrement de la réservation: {str(e)}")
+            flash('Une erreur est survenue lors de l\'enregistrement de votre réservation.', 'error')
+            return redirect(url_for('reserver'))
+    
+    # For GET request, show the reservation form
+    return render_template('reservation_form.html', today=datetime.date.today().isoformat())
+
+@app.route('/confirmation/<reference>')
+def confirmation(reference):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM reservations WHERE reference = ?', (reference,))
+        reservation = cursor.fetchone()
+        
+        if reservation is None:
+            flash('Réservation non trouvée.', 'error')
+            return redirect(url_for('accueil'))
+            
+        # Convert Row to dict for easier template access
+        reservation = dict(reservation)
+        
+        # Format the date for display
+        if 'date' in reservation and reservation['date']:
+            try:
+                date_obj = datetime.datetime.strptime(reservation['date'], '%Y-%m-%d')
+                reservation['date'] = date_obj.strftime('%d/%m/%Y')
+            except (ValueError, TypeError):
+                pass
+                
+        return render_template('confirmation.html', reservation=reservation)
+        
+    except Exception as e:
+        app.logger.error(f"Erreur lors de la récupération de la réservation: {str(e)}")
+        flash('Une erreur est survenue lors de la récupération de votre réservation.', 'error')
+        return redirect(url_for('accueil'))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0',port=5000)
