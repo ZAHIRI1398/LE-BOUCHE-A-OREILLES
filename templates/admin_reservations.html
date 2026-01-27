@@ -113,6 +113,9 @@
                                 {% endif %}
                             </td>
                             <td class="d-flex">
+                                <a href="{{ url_for('modifier_reservation', id=reservation.id) }}" class="btn btn-sm btn-primary me-1" title="Modifier">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
                                 {% if reservation.statut != 'confirmee' %}
                                 <form action="{{ url_for('changer_statut', id=reservation.id) }}" method="POST" class="me-1">
                                     <input type="hidden" name="nouveau_statut" value="confirmee">

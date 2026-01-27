@@ -109,14 +109,30 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         
         msg.attach(MIMEText(body, 'html'))
         
-        # Connexion au serveur SMTP et envoi
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        # Connexion au serveur SMTP et envoi avec plus de logs
+        print(f"Tentative d'envoi d'email à {email}...")
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
+            print("Connexion au serveur SMTP...")
+            server.ehlo()
+            print("Démarrage du chiffrement TLS...")
             server.starttls()
+            server.ehlo()
+            print("Authentification...")
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            print("Envoi du message...")
             server.send_message(msg)
+            print("Email envoyé avec succès!")
+            return True
             
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"Erreur d'authentification SMTP: {str(e)}")
+        print("Vérifiez vos identifiants SMTP et assurez-vous que l'accès aux applications moins sécurisées est activé.")
+    except smtplib.SMTPException as e:
+        print(f"Erreur SMTP: {str(e)}")
     except Exception as e:
-        print(f"Erreur lors de l'envoi de l'email : {e}")
+        print(f"Erreur inattendue lors de l'envoi de l'email: {str(e)}")
+    
+    return False
 
 @reservation_bp.route('/creer_reservation', methods=['POST'])
 def creer_reservation():

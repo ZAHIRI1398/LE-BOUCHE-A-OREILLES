@@ -352,6 +352,56 @@ def reserver():
     # For GET request, show the reservation form
     return render_template('reservation_form.html', today=datetime.date.today().isoformat())
 
+@app.route('/admin/reservation/modifier/<int:id>', methods=['GET', 'POST'])
+@login_required
+def modifier_reservation(id):
+    conn = get_db_connection()
+    try:
+        if request.method == 'POST':
+            # Récupérer les données du formulaire
+            nom = request.form.get('nom')
+            email = request.form.get('email')
+            telephone = request.form.get('telephone')
+            date = request.form.get('date')
+            heure = request.form.get('heure')
+            personnes = request.form.get('personnes')
+            message = request.form.get('message', '')
+            statut = request.form.get('statut')
+            
+            # Mettre à jour la réservation dans la base de données
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                UPDATE reservations 
+                SET nom = ?, email = ?, telephone = ?, date = ?, 
+                    heure = ?, personnes = ?, message = ?, statut =?
+                WHERE id =?
+                ''',
+                (nom, email, telephone, date, heure, personnes, message, statut, id)
+            )
+            conn.commit()
+            
+            flash('La réservation a été mise à jour avec succès.', 'success')
+            return redirect(url_for('afficher_toutes_reservations'))
+        
+        # Pour les requêtes GET, afficher le formulaire de modification
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM reservations WHERE id = ?', (id,))
+        reservation = cursor.fetchone()
+        
+        if reservation is None:
+            flash('Réservation non trouvée.', 'error')
+            return redirect(url_for('afficher_toutes_reservations'))
+            
+        return render_template('modifier_reservation.html', reservation=dict(reservation))
+        
+    except Exception as e:
+        app.logger.error(f"Erreur lors de la modification de la réservation: {str(e)}")
+        flash('Une erreur est survenue lors de la modification de la réservation.', 'error')
+        return redirect(url_for('afficher_toutes_reservations'))
+    finally:
+        conn.close()
+
 @app.route('/confirmation/<reference>')
 def confirmation(reference):
     try:

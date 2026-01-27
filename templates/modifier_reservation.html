@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Modifier la réservation - Administration{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="h4 mb-0">Modifier la réservation #{{ reservation.id }}</h2>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="{{ url_for('modifier_reservation', id=reservation.id) }}">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="nom" class="form-label">Nom complet</label>
+                                <input type="text" class="form-control" id="nom" name="nom" value="{{ reservation.nom }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" name="email" value="{{ reservation.email }}" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="telephone" class="form-label">Téléphone</label>
+                                <input type="tel" class="form-control" id="telephone" name="telephone" value="{{ reservation.telephone or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="personnes" class="form-label">Nombre de personnes</label>
+                                <input type="number" class="form-control" id="personnes" name="personnes" min="1" value="{{ reservation.personnes }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="statut" class="form-label">Statut</label>
+                                <select class="form-select" id="statut" name="statut" required>
+                                    <option value="en_attente" {% if reservation.statut == 'en_attente' %}selected{% endif %}>En attente</option>
+                                    <option value="confirmee" {% if reservation.statut == 'confirmee' %}selected{% endif %}>Confirmée</option>
+                                    <option value="annulee" {% if reservation.statut == 'annulee' %}selected{% endif %}>Annulée</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="date" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="date" name="date" value="{{ reservation.date }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="heure" class="form-label">Heure</label>
+                                <select class="form-select" id="heure" name="heure" required>
+                                    {% for h in range(12, 23) %}
+                                        <option value="{{ '%02d'|format(h) }}:00" {% if reservation.heure == '%02d:00'|format(h) %}selected{% endif %}>{{ '%02d'|format(h) }}:00</option>
+                                        {% if h < 22 %}
+                                            <option value="{{ '%02d'|format(h) }}:30" {% if reservation.heure == '%02d:30'|format(h) %}selected{% endif %}>{{ '%02d'|format(h) }}:30</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="message" class="form-label">Message ou demande spéciale</label>
+                            <textarea class="form-control" id="message" name="message" rows="3">{{ reservation.message or '' }}</textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('afficher_toutes_reservations') }}" class="btn btn-secondary">Annuler</a>
+                            <button type="submit" class="btn btn-primary">Enregistrer les modifications</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -38,3 +38,9 @@ python run.py
 - Flask
 - SQLite
 - HTML/CSS/JavaScript
+###git
+git status
+git add main.py templates/reservation_form.html
+git commit -m "Correction du formulaire de réservation et de la page de confirmation"
+rm -Force .git/index.lock
+git push origin main
