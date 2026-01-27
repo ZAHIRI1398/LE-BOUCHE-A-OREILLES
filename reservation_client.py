@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
+from flask_login import login_required
 import sqlite3
 import os
 import smtplib
@@ -189,6 +190,7 @@ def confirmation():
     return render_template('confirmation.html', reference=reference)
 
 @reservation_bp.route('/admin/reservations')
+@login_required
 def admin_reservations():
     # Vérifier si l'utilisateur est admin (à implémenter selon votre système d'authentification)
     # if not current_user.is_authenticated or not current_user.is_admin:
@@ -210,7 +212,10 @@ def admin_reservations():
     
     conn.close()
     
-    return render_template('admin_reservations.html', reservations=reservations)
+    # Ajout de la date actuelle pour l'en-tête d'impression
+    return render_template('admin_reservations.html', 
+                         reservations=reservations,
+                         now=datetime.now())
 
 @reservation_bp.route('/admin/reservations/<int:id>/changer_statut', methods=['POST'])
 def changer_statut(id):

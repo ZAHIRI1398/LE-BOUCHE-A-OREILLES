@@ -11,6 +11,87 @@
             background-color: #f8f9fa;
             font-family: 'Arial', sans-serif;
         }
+        
+        /* Styles pour l'impression */
+        @media print {
+            .no-print, .btn {
+                display: none !important;
+            }
+            
+            body {
+                padding: 20px;
+                font-size: 12px;
+                background: white;
+            }
+            
+            .admin-container {
+                box-shadow: none;
+                padding: 0;
+                margin: 0;
+            }
+            
+            .table {
+                width: 100%;
+                margin-bottom: 1rem;
+                color: #212529;
+            }
+            
+            .table th,
+            .table td {
+                padding: 0.3rem;
+                vertical-align: top;
+                border-top: 1px solid #dee2e6;
+            }
+            
+            .badge {
+                padding: 0.25em 0.4em;
+                font-size: 75%;
+                font-weight: 700;
+                line-height: 1;
+                text-align: center;
+                white-space: nowrap;
+                vertical-align: baseline;
+                border-radius: 0.25rem;
+            }
+            
+            .badge-success {
+                background-color: #28a745;
+                color: white;
+            }
+            
+            .badge-warning {
+                background-color: #ffc107;
+                color: #212529;
+            }
+            
+            .badge-danger {
+                background-color: #dc3545;
+                color: white;
+            }
+            
+            .print-header {
+                display: block;
+                text-align: center;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #000;
+            }
+            
+            .print-header h2 {
+                margin: 0 0 10px 0;
+                padding: 0;
+            }
+            
+            .print-date {
+                font-size: 0.9em;
+                color: #666;
+            }
+            
+            @page {
+                size: A4 landscape;
+                margin: 1cm;
+            }
+        }
         .admin-container {
             max-width: 1200px;
             margin: 20px auto;
@@ -54,9 +135,18 @@
 
     <div class="container">
         <div class="admin-container">
+            <!-- En-tête d'impression (caché à l'écran, visible à l'impression) -->
+            <div class="print-header">
+                <h2>Liste des Réservations</h2>
+                <div class="print-date">Imprimé le {{ now.strftime('%d/%m/%Y à %H:%M') }}</div>
+            </div>
+            
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1>Gestion des réservations</h1>
-                <div>
+                <div class="d-flex align-items-center">
+                    <button onclick="window.print()" class="btn btn-outline-secondary me-3 no-print">
+                        <i class="bi bi-printer"></i> Imprimer
+                    </button>
                     <span class="me-2">Filtrer :</span>
                     <div class="btn-group" role="group">
                         <a href="{{ url_for('afficher_toutes_reservations') }}" class="btn btn-outline-secondary">Toutes</a>

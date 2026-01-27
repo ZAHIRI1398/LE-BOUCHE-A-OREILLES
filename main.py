@@ -3,15 +3,16 @@ import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 import sqlite3
 import logging
-from reservation_client import reservation_bp
 from functools import wraps
+from datetime import datetime, date  # Ajout de l'import de date
+
+# Importation du blueprint de réservation
+from reservation_client import reservation_bp
 
 app = Flask(__name__)
+app.register_blueprint(reservation_bp, url_prefix='/reservation')
 app.secret_key = 'votre_cle_secrète_plus_secrete_encore_123456'
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'reservations.db')
-
-# Enregistrer le Blueprint de réservation
-app.register_blueprint(reservation_bp, url_prefix='/reservation')
 
 # Configuration de logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -126,9 +127,11 @@ def afficher_toutes_reservations():
             res['plats'] = res.get('plats', '').split(', ') if res.get('plats') else []
             reservations_list.append(res)
             
+        # Ajouter la date et l'heure actuelles pour l'impression
         return render_template('admin_reservations.html', 
                              reservations=reservations_list,
-                             email=None)
+                             email=None,
+                             now=datetime.now())
     except sqlite3.Error as e:
         app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
         flash("Une erreur est survenue lors de la récupération des réservations.", "error")
@@ -148,7 +151,7 @@ def accueil():
 
 @app.route('/accueil')
 def page_accueil():
-    return render_template('accueil.html', today=datetime.date.today().isoformat())
+    return render_template('accueil.html', today=date.today().isoformat())
 
 @app.route('/ajouter_menu')
 def ajouter_menu():
@@ -320,7 +323,7 @@ def reserver():
             email = request.form.get('email')
             telephone = request.form.get('telephone')
             personnes = int(request.form.get('personnes', 1))
-            date = request.form.get('date')
+            date_resa = request.form.get('date')
             heure = request.form.get('heure')
             message = request.form.get('message', '')
             
@@ -336,7 +339,7 @@ def reserver():
                 (reference, nom, email, telephone, date, heure, personnes, message, statut)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'en_attente')
                 ''',
-                (reference, nom, email, telephone, date, heure, personnes, message)
+                (reference, nom, email, telephone, date_resa, heure, personnes, message)
             )
             conn.commit()
             conn.close()
@@ -350,7 +353,7 @@ def reserver():
             return redirect(url_for('reserver'))
     
     # For GET request, show the reservation form
-    return render_template('reservation_form.html', today=datetime.date.today().isoformat())
+    return render_template('reservation_form.html', today=date.today().isoformat())
 
 @app.route('/admin/reservation/modifier/<int:id>', methods=['GET', 'POST'])
 @login_required
@@ -420,9 +423,10 @@ def confirmation(reference):
         # Format the date for display
         if 'date' in reservation and reservation['date']:
             try:
-                date_obj = datetime.datetime.strptime(reservation['date'], '%Y-%m-%d')
+                date_obj = datetime.strptime(str(reservation['date']), '%Y-%m-%d')
                 reservation['date'] = date_obj.strftime('%d/%m/%Y')
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                app.logger.error(f"Erreur de formatage de date: {e}")
                 pass
                 
         return render_template('confirmation.html', reservation=reservation)
