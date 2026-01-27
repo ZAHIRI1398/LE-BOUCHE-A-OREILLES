@@ -1,10 +1,18 @@
 import os
 import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, make_response
 import sqlite3
 import logging
 from functools import wraps
 from datetime import datetime, date  # Ajout de l'import de date
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from io import BytesIO
+import PyPDF2
+import re
 
 # Importation du blueprint de réservation
 from reservation_client import reservation_bp
@@ -311,6 +319,110 @@ def admin_menu():
         if 'conn' in locals():
             conn.close()
 
+@app.route('/admin/menu/export_pdf')
+@login_required
+def export_menu_pdf():
+    try:
+        # Récupérer les données du menu
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM menu ORDER BY categorie, nom')
+        plats = cursor.fetchall()
+        
+        # Grouper les plats par catégorie
+        menu_par_categorie = {}
+        for plat in plats:
+            categorie = plat['categorie'] or 'Autres'
+            if categorie not in menu_par_categorie:
+                menu_par_categorie[categorie] = []
+            menu_par_categorie[categorie].append(dict(plat))
+        
+        # Créer le PDF
+        response = make_response()
+        response.mimetype = 'application/pdf'
+        response.headers['Content-Disposition'] = 'attachment; filename=menu_restaurant.pdf'
+        
+        # Créer le document PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                              rightMargin=72, leftMargin=72,
+                              topMargin=72, bottomMargin=72)
+        
+        # Styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('Title', 
+                                   parent=styles['Heading1'],
+                                   fontSize=24,
+                                   spaceAfter=30,
+                                   alignment=1)  # 1 = center
+        
+        # Contenu du PDF
+        elements = []
+        
+        # Titre
+        elements.append(Paragraph("Menu du Restaurant", title_style))
+        elements.append(Spacer(1, 20))
+        
+        # Date d'édition
+        date_style = ParagraphStyle('Date',
+                                  parent=styles['Normal'],
+                                  fontSize=10,
+                                  alignment=2)  # 2 = right
+        elements.append(Paragraph(f"Édité le {date.today().strftime('%d/%m/%Y')}", date_style))
+        elements.append(Spacer(1, 30))
+        
+        # Pour chaque catégorie
+        for categorie, plats in menu_par_categorie.items():
+            # Titre de la catégorie
+            elements.append(Paragraph(categorie.upper(), styles['Heading2']))
+            elements.append(Spacer(1, 10))
+            
+            # Tableau des plats
+            data = [['Nom', 'Description', 'Prix']]
+            for plat in plats:
+                data.append([
+                    plat['nom'],
+                    plat['description'],
+                    f"{plat['prix']:.2f} €"
+                ])
+            
+            # Style du tableau
+            table_style = TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('ALIGN', (-1, 0), (-1, -1), 'RIGHT'),  # Aligner la colonne de prix à droite
+            ])
+            
+            # Créer et styliser le tableau
+            table = Table(data, colWidths=[doc.width/3.0]*3)
+            table.setStyle(table_style)
+            elements.append(table)
+            elements.append(Spacer(1, 20))
+        
+        # Générer le PDF
+        doc.build(elements)
+        
+        # Récupérer le contenu du buffer et le renvoyer
+        pdf = buffer.getvalue()
+        buffer.close()
+        response.data = pdf
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Erreur lors de la génération du PDF: {str(e)}")
+        flash('Une erreur est survenue lors de la génération du PDF.', 'error')
+        return redirect(url_for('admin_menu'))
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 @app.route('/supprimer_plat/<int:plat_id>', methods=['POST'])
 def supprimer_plat(plat_id):
     try:
@@ -349,6 +461,100 @@ def generate_reference():
     """Generate a unique reference for reservations"""
     chars = string.ascii_uppercase + string.digits
     return 'RES-' + ''.join(random.choices(chars, k=8))
+
+def extraire_plats_depuis_texte(texte):
+    """
+    Extrait les plats, descriptions et prix à partir du texte brut du PDF
+    Cette fonction est basique et devra être adaptée selon le format de votre PDF
+    """
+    plats = []
+    # Ceci est un exemple très basique - à adapter selon votre format de PDF
+    # On cherche les lignes qui ressemblent à des plats (nom, description, prix)
+    lignes = [ligne.strip() for ligne in texte.split('\n') if ligne.strip()]
+    
+    i = 0
+    while i < len(lignes):
+        ligne = lignes[i]
+        # Si la ligne contient un prix (format XX.XX€ ou XX,XX€)
+        match = re.search(r'(\d+[,\.]\d+)\s*€?$', ligne)
+        if match:
+            prix = match.group(1).replace(',', '.')
+            try:
+                prix = float(prix)
+                # On suppose que la ligne précédente est la description
+                # et celle d'avant est le nom
+                if i >= 2:
+                    nom = lignes[i-2]
+                    description = lignes[i-1]
+                    plats.append({
+                        'nom': nom,
+                        'description': description,
+                        'prix': prix,
+                        'categorie': 'plat_principal'  # Par défaut
+                    })
+            except ValueError:
+                pass
+        i += 1
+    
+    return plats
+
+@app.route('/admin/menu/importer', methods=['GET', 'POST'])
+@login_required
+def importer_menu():
+    if request.method == 'POST':
+        if 'fichier' not in request.files:
+            flash('Aucun fichier sélectionné', 'error')
+            return redirect(request.url)
+        
+        fichier = request.files['fichier']
+        if fichier.filename == '':
+            flash('Aucun fichier sélectionné', 'error')
+            return redirect(request.url)
+        
+        if fichier and fichier.filename.lower().endswith('.pdf'):
+            try:
+                # Lire le contenu du PDF
+                pdf_reader = PyPDF2.PdfReader(fichier)
+                texte_complet = ""
+                
+                # Extraire le texte de chaque page
+                for page in pdf_reader.pages:
+                    texte_complet += page.extract_text() + "\n"
+                
+                # Extraire les plats du texte
+                plats = extraire_plats_depuis_texte(texte_complet)
+                
+                # Enregistrer les plats dans la base de données
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                plats_ajoutes = 0
+                
+                for plat in plats:
+                    try:
+                        cursor.execute(
+                            'INSERT INTO menu (nom, description, prix, categorie) VALUES (?, ?, ?, ?)',
+                            (plat['nom'], plat['description'], plat['prix'], plat['categorie'])
+                        )
+                        plats_ajoutes += 1
+                    except sqlite3.IntegrityError:
+                        # Ignorer les doublons
+                        pass
+                
+                conn.commit()
+                conn.close()
+                
+                flash(f'Import réussi : {plats_ajoutes} plats ajoutés au menu', 'success')
+                return redirect(url_for('admin_menu'))
+                
+            except Exception as e:
+                app.logger.error(f'Erreur lors de l\'import du menu : {str(e)}')
+                flash('Une erreur est survenue lors de l\'import du menu', 'error')
+                return redirect(request.url)
+        else:
+            flash('Format de fichier non supporté. Veuillez sélectionner un fichier PDF.', 'error')
+            return redirect(request.url)
+    
+    return render_template('importer_menu.html')
 
 @app.route('/reserver', methods=['GET', 'POST'])
 def reserver():
