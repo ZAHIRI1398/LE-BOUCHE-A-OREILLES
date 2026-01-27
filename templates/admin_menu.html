@@ -43,7 +43,7 @@
                             <td class="align-middle text-end">{{ "%.2f"|format(plat.prix) }} €</td>
                             <td class="align-middle text-end">
                                 <div class="btn-group">
-                                    <a href="#" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('modifier_plat', plat_id=plat.id) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     <form action="{{ url_for('supprimer_plat', plat_id=plat.id) }}" method="POST" class="d-inline">

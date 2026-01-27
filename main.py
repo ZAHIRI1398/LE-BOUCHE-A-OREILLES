@@ -162,6 +162,42 @@ def ajouter_menu():
 def ajouter_plat():
     return render_template('ajouter-menu.html')
 
+@app.route('/admin/modifier_plat/<int:plat_id>', methods=['GET', 'POST'])
+@login_required
+def modifier_plat(plat_id):
+    if request.method == 'GET':
+        conn = get_db_connection()
+        plat = conn.execute('SELECT * FROM menu WHERE id = ?', (plat_id,)).fetchone()
+        conn.close()
+        if plat is None:
+            flash('Plat non trouvé', 'error')
+            return redirect(url_for('admin_menu'))
+        return render_template('modifier-menu.html', plat=plat)
+    else:
+        # Traitement de la soumission du formulaire
+        nom = request.form['nom_plat']
+        description = request.form['description']
+        prix = float(request.form['prix'])
+        categorie = request.form['categorie']
+        
+        conn = get_db_connection()
+        try:
+            conn.execute('''
+                UPDATE menu 
+                SET nom = ?, description = ?, prix = ?, categorie = ?
+                WHERE id = ?
+            ''', (nom, description, prix, categorie, plat_id))
+            conn.commit()
+            flash('Plat mis à jour avec succès!', 'success')
+        except Exception as e:
+            conn.rollback()
+            flash('Erreur lors de la mise à jour du plat', 'error')
+            app.logger.error(f'Erreur mise à jour plat: {str(e)}')
+        finally:
+            conn.close()
+        
+        return redirect(url_for('admin_menu'))
+
 @app.route('/admin/ajouter_plat_action', methods=['POST'])
 @login_required
 def admin_ajouter_plat_action():
