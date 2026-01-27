@@ -181,8 +181,9 @@ def modifier_plat(plat_id):
             flash('Plat non trouvé', 'error')
             return redirect(url_for('admin_menu'))
         return render_template('modifier-menu.html', plat=plat)
-    else:
-        # Traitement de la soumission du formulaire
+    elif request.method == 'POST':  # Ajout de cette condition    
+    
+     # Traitement de la soumission du formulaire
         nom = request.form['nom_plat']
         description = request.form['description']
         prix = float(request.form['prix'])
