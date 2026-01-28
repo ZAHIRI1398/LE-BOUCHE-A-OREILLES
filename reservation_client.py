@@ -4,7 +4,6 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from main import db, Reservation
 
 # Création d'un Blueprint pour les routes de réservation
 reservation_bp = Blueprint('reservation', __name__)
@@ -118,6 +117,9 @@ def creer_reservation():
         message = request.form.get('message', '')
         
         try:
+            # Importer ici pour éviter l'importation circulaire
+            from main import db, Reservation
+            
             # Générer une référence unique
             import random
             import string
