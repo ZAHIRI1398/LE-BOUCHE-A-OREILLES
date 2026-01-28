@@ -24,8 +24,17 @@ app.secret_key = 'votre_cle_secrète_plus_secrete_encore_123456'
 # Configuration de la base de données
 basedir = Path(__file__).parent
 DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{basedir}/data/restaurant.db')
+
+# Utiliser pg8000 comme driver PostgreSQL pour éviter les problèmes de compatibilité
+if DATABASE_URL and DATABASE_URL.startswith('postgresql://'):
+    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+pg8000://')
+
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300
+}
 db = SQLAlchemy(app)
 # Configuration de logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
