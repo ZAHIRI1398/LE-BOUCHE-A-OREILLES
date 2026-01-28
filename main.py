@@ -106,9 +106,16 @@ def admin_login():
 @app.route('/admin/logout')
 @login_required
 def admin_logout():
-    session.pop('admin_logged_in', None)
+    # Nettoyage complet de la session
+    session.clear()  # Efface toutes les données de session
+    # S'assurer que toutes les connexions à la base de données sont fermées
+    try:
+        conn = get_db_connection()
+        conn.close()
+    except:
+        pass  # Ignorer les erreurs si la connexion n'est pas ouverte
     flash('Vous avez été déconnecté avec succès.', 'success')
-    return redirect(url_for('accueil'))    
+    return redirect(url_for('accueil')) 
 
 # Exemple de route protégée
 @app.route('/admin/reservations')
@@ -184,24 +191,48 @@ def modifier_plat(plat_id):
     elif request.method == 'POST':  # Ajout de cette condition    
     
      # Traitement de la soumission du formulaire
-        nom = request.form['nom_plat']
-        description = request.form['description']
-        prix = float(request.form['prix'])
-        categorie = request.form['categorie']
+      # Récupération des données du formulaire
+        nom = request.form.get('nom_plat')
+        description = request.form.get('description')
+        prix = request.form.get('prix')
+        categorie = request.form.get('categorie')
         
-        conn = get_db_connection()
+        # Validation des données
+        if not all([nom, description, prix, categorie]):
+            flash('Tous les champs sont obligatoires', 'error')
+            return redirect(url_for('modifier_plat', plat_id=plat_id))
+            
         try:
-            conn.execute('''
+            # Conversion du prix en float
+            prix = float(prix)
+            
+            # Mise à jour en base de données
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Vérification que le plat existe
+            plat = cursor.execute('SELECT id FROM menu WHERE id = ?', (plat_id,)).fetchone()
+            if not plat:
+                flash('Plat non trouvé', 'error')
+                return redirect(url_for('admin_menu'))
+            
+            # Mise à jour
+            cursor.execute('''
                 UPDATE menu 
                 SET nom = ?, description = ?, prix = ?, categorie = ?
                 WHERE id = ?
             ''', (nom, description, prix, categorie, plat_id))
+            
             conn.commit()
             flash('Plat mis à jour avec succès!', 'success')
+            
+        except ValueError:
+            flash('Le prix doit être un nombre valide', 'error')
+            return redirect(url_for('modifier_plat', plat_id=plat_id))
         except Exception as e:
             conn.rollback()
-            flash('Erreur lors de la mise à jour du plat', 'error')
-            app.logger.error(f'Erreur mise à jour plat: {str(e)}')
+            app.logger.error(f'Erreur lors de la mise à jour du plat : {str(e)}')
+            flash('Une erreur est survenue lors de la mise à jour du plat', 'error')
         finally:
             conn.close()
         

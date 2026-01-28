@@ -36,15 +36,11 @@
                                     <option value="dessert" {% if plat['categorie'] == 'dessert' %}selected{% endif %}>Dessert</option>
                                     <option value="boisson" {% if plat['categorie'] == 'boisson' %}selected{% endif %}>Boisson</option>
                                 </select>
-                            </div>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <a href="{{ url_for('admin_menu') }}" class="btn btn-outline-secondary">
-                                <i class="fas fa-arrow-left me-1"></i> Retour au menu
-                            </a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save me-1"></i> Mettre à jour le plat
-                            </button>
+                           </div>
+                       </div>
+                       <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin_menu') }}" class="btn btn-secondary">Annuler</a>
+                            <button type="submit" class="btn btn-primary">Mettre à jour</button>
                         </div>
                     </form>
                 </div>
