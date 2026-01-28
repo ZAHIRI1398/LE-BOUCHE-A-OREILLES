@@ -1,10 +1,9 @@
 import os
 import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, session, make_response
-import sqlite3
 import logging
 from functools import wraps
-from datetime import datetime, date  # Ajout de l'import de date
+from datetime import datetime, date
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -13,6 +12,8 @@ from reportlab.lib.units import inch
 from io import BytesIO
 import PyPDF2
 import re
+from flask_sqlalchemy import SQLAlchemy
+from pathlib import Path
 
 # Importation du blueprint de réservation
 from reservation_client import reservation_bp
@@ -20,63 +21,50 @@ from reservation_client import reservation_bp
 app = Flask(__name__)
 app.register_blueprint(reservation_bp, url_prefix='/reservation')
 app.secret_key = 'votre_cle_secrète_plus_secrete_encore_123456'
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'reservations.db')
-
+# Configuration de la base de données
+basedir = Path(__file__).parent
+DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{basedir}/data/restaurant.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 # Configuration de logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+# Modèles de données
+class Plat(db.Model):
+    __tablename__ = 'menu'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    nom = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    prix = db.Column(db.Float, nullable=False)
+    categorie = db.Column(db.String(50), nullable=False)
+    image = db.Column(db.String(200))
+
+class Reservation(db.Model):
+    __tablename__ = 'reservations'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    reference = db.Column(db.String(20), unique=True, nullable=False)
+    nom = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+    telephone = db.Column(db.String(20))
+    date = db.Column(db.String(20), nullable=False)
+    heure = db.Column(db.String(10), nullable=False)
+    personnes = db.Column(db.Integer, nullable=False)
+    message = db.Column(db.Text)
+    statut = db.Column(db.String(20), default='en_attente')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 def creer_tables():
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Créer les tables si elles n'existent pas
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS menu (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nom TEXT NOT NULL,
-                    description TEXT,
-                    prix REAL NOT NULL,
-                    categorie TEXT
-                )
-            ''')
-
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS reservations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    reference TEXT UNIQUE,
-                    nom TEXT NOT NULL,
-                    email TEXT NOT NULL,
-                    telephone TEXT,
-                    date TEXT NOT NULL,
-                    heure TEXT NOT NULL,
-                    personnes INTEGER NOT NULL,
-                    message TEXT,
-                    statut TEXT DEFAULT 'en_attente',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS reservations_plats (
-                    reservation_id INTEGER NOT NULL,
-                    plat_id INTEGER NOT NULL,
-                    FOREIGN KEY (reservation_id) REFERENCES reservations(id),
-                    FOREIGN KEY (plat_id) REFERENCES menu(id),
-                    PRIMARY KEY (reservation_id, plat_id)
-                )
-            ''')
-
-            conn.commit()
+        with app.app_context():
+            db.create_all()
             app.logger.info("Tables créées avec succès.")
-    except sqlite3.Error as e:
+    except Exception as e:
         app.logger.error(f"Erreur lors de la création des tables: {e}")
- # Configuration de l'admin
+
+# Configuration de l'admin
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "password123"  # À changer en production
 
@@ -108,56 +96,30 @@ def admin_login():
 def admin_logout():
     # Nettoyage complet de la session
     session.clear()  # Efface toutes les données de session
-    # S'assurer que toutes les connexions à la base de données sont fermées
-    try:
-        conn = get_db_connection()
-        conn.close()
-    except:
-        pass  # Ignorer les erreurs si la connexion n'est pas ouverte
     flash('Vous avez été déconnecté avec succès.', 'success')
-    return redirect(url_for('accueil')) 
+    return redirect(url_for('accueil'))
 
 # Exemple de route protégée
 @app.route('/admin/reservations')
 @login_required
 def afficher_toutes_reservations():
-    conn = get_db_connection()
     try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT r.*, GROUP_CONCAT(m.nom, ', ') as plats
-            FROM reservations r
-            LEFT JOIN reservations_plats rp ON r.id = rp.reservation_id
-            LEFT JOIN menu m ON rp.plat_id = m.id
-            GROUP BY r.id
-            ORDER BY r.date DESC, r.heure DESC
-        ''')
-        reservations = cursor.fetchall()
+        reservations = Reservation.query.order_by(Reservation.date.desc(), Reservation.heure.desc()).all()
         
-        # Convert to list of dicts for template
-        reservations_list = []
-        for row in reservations:
-            res = dict(row)
-            # Convert Row to dict and handle any necessary type conversions
-            res['plats'] = res.get('plats', '').split(', ') if res.get('plats') else []
-            reservations_list.append(res)
-            
         # Ajouter la date et l'heure actuelles pour l'impression
         return render_template('admin_reservations.html', 
-                             reservations=reservations_list,
+                             reservations=reservations,
                              email=None,
                              now=datetime.now())
-    except sqlite3.Error as e:
+    except Exception as e:
         app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
         flash("Une erreur est survenue lors de la récupération des réservations.", "error")
         return redirect(url_for('accueil'))
-    finally:
-        conn.close()
+
+
 
 # Créer les tables au démarrage
 with app.app_context():
-    # Créer le dossier data s'il n'existe pas
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     creer_tables()
 
 @app.route('/')
@@ -180,63 +142,39 @@ def ajouter_plat():
 @app.route('/admin/modifier_plat/<int:plat_id>', methods=['GET', 'POST'])
 @login_required
 def modifier_plat(plat_id):
-    if request.method == 'GET':
-        conn = get_db_connection()
-        plat = conn.execute('SELECT * FROM menu WHERE id = ?', (plat_id,)).fetchone()
-        conn.close()
-        if plat is None:
-            flash('Plat non trouvé', 'error')
-            return redirect(url_for('admin_menu'))
-        return render_template('modifier-menu.html', plat=plat)
-    elif request.method == 'POST':  # Ajout de cette condition    
+    plat = Plat.query.get_or_404(plat_id)
     
-     # Traitement de la soumission du formulaire
-      # Récupération des données du formulaire
-        nom = request.form.get('nom_plat')
-        description = request.form.get('description')
-        prix = request.form.get('prix')
-        categorie = request.form.get('categorie')
-        
-        # Validation des données
-        if not all([nom, description, prix, categorie]):
-            flash('Tous les champs sont obligatoires', 'error')
-            return redirect(url_for('modifier_plat', plat_id=plat_id))
-            
+    if request.method == 'POST':
         try:
-            # Conversion du prix en float
-            prix = float(prix)
+            # Récupération des données du formulaire
+            plat.nom = request.form.get('nom_plat')
+            plat.description = request.form.get('description')
+            plat.prix = float(request.form.get('prix'))
+            plat.categorie = request.form.get('categorie')
             
-            # Mise à jour en base de données
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            # Validation des données
+            if not all([plat.nom, plat.description, plat.prix, plat.categorie]):
+                flash('Tous les champs sont obligatoires', 'error')
+                return render_template('modifier-menu.html', plat=plat)
             
-            # Vérification que le plat existe
-            plat = cursor.execute('SELECT id FROM menu WHERE id = ?', (plat_id,)).fetchone()
-            if not plat:
-                flash('Plat non trouvé', 'error')
-                return redirect(url_for('admin_menu'))
-            
-            # Mise à jour
-            cursor.execute('''
-                UPDATE menu 
-                SET nom = ?, description = ?, prix = ?, categorie = ?
-                WHERE id = ?
-            ''', (nom, description, prix, categorie, plat_id))
-            
-            conn.commit()
+            # Sauvegarde en base de données
+            db.session.commit()
             flash('Plat mis à jour avec succès!', 'success')
+            return redirect(url_for('admin_menu'))
             
         except ValueError:
             flash('Le prix doit être un nombre valide', 'error')
-            return redirect(url_for('modifier_plat', plat_id=plat_id))
         except Exception as e:
-            conn.rollback()
-            app.logger.error(f'Erreur lors de la mise à jour du plat : {str(e)}')
+            db.session.rollback()
+            app.logger.error(f"Erreur lors de la mise à jour du plat {plat_id}: {str(e)}")
             flash('Une erreur est survenue lors de la mise à jour du plat', 'error')
-        finally:
-            conn.close()
-        
-        return redirect(url_for('admin_menu'))
+    
+    # Si c'est une requête GET ou en cas d'erreur POST
+    return render_template('modifier-menu.html', plat=plat)
+            
+
+            
+ 
 
 @app.route('/admin/ajouter_plat_action', methods=['POST'])
 @login_required
@@ -248,20 +186,23 @@ def admin_ajouter_plat_action():
         categorie = request.form.get('categorie', 'plat_principal')  # Valeur par défaut
         
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                'INSERT INTO menu (nom, description, prix, categorie) VALUES (?, ?, ?, ?)',
-                (nom_plat, description, prix, categorie)
+            prix = float(prix)
+            nouveau_plat = Plat(
+                nom=nom_plat,
+                description=description,
+                prix=prix,
+                categorie=categorie
             )
-            conn.commit()
+            db.session.add(nouveau_plat)
+            db.session.commit()
             flash('Plat ajouté avec succès!', 'success')
-            return redirect(url_for('menu'))
+            return redirect(url_for('admin_menu'))
+        except ValueError:
+            flash('Le prix doit être un nombre valide', 'error')
         except Exception as e:
+            db.session.rollback()
             flash(f'Erreur lors de l\'ajout du plat: {str(e)}', 'error')
-            return redirect(url_for('ajouter_plat'))
-        finally:
-            conn.close()
+        return redirect(url_for('ajouter_plat'))
     return redirect(url_for('ajouter_plat'))
 
 @app.route('/changer_statut/<int:id>', methods=['POST'])
@@ -275,20 +216,14 @@ def changer_statut(id):
         flash('Statut invalide', 'error')
         return redirect(url_for('afficher_toutes_reservations'))
     
-    conn = get_db_connection()
     try:
-        cursor = conn.cursor()
-        cursor.execute(
-            'UPDATE reservations SET statut = ? WHERE id = ?',
-            (nouveau_statut, id)
-        )
-        conn.commit()
+        reservation = Reservation.query.get_or_404(id)
+        reservation.statut = nouveau_statut
+        db.session.commit()
         flash(f'Le statut de la réservation a été mis à jour avec succès.', 'success')
-    except sqlite3.Error as e:
+    except Exception as e:
         app.logger.error(f"Erreur lors de la mise à jour du statut: {e}")
         flash('Une erreur est survenue lors de la mise à jour du statut.', 'error')
-    finally:
-        conn.close()
     
     return redirect(url_for('afficher_toutes_reservations'))
 
@@ -296,18 +231,22 @@ def changer_statut(id):
 @app.route('/carte')
 def menu():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM menu ORDER BY categorie, nom')
-        plats = cursor.fetchall()
+        plats = Plat.query.order_by(Plat.categorie, Plat.nom).all()
         
         # Grouper les plats par catégorie
         menu_par_categorie = {}
         for plat in plats:
-            categorie = plat['categorie'] or 'Autres'
+            categorie = plat.categorie or 'Autres'
             if categorie not in menu_par_categorie:
                 menu_par_categorie[categorie] = []
-            menu_par_categorie[categorie].append(dict(plat))
+            menu_par_categorie[categorie].append({
+                'id': plat.id,
+                'nom': plat.nom,
+                'description': plat.description,
+                'prix': plat.prix,
+                'categorie': plat.categorie,
+                'image': plat.image
+            })
             
         # Si l'utilisateur est admin, on affiche la vue admin
         if session.get('admin_logged_in'):
@@ -320,26 +259,26 @@ def menu():
         app.logger.error(f"Erreur dans la route menu: {str(e)}")
         flash('Une erreur est survenue lors du chargement du menu.', 'error')
         return redirect(url_for('accueil'))
-    finally:
-        if 'conn' in locals():
-            conn.close()
-
 @app.route('/admin/menu')
 @login_required
 def admin_menu():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM menu ORDER BY categorie, nom')
-        plats = cursor.fetchall()
+        plats = Plat.query.order_by(Plat.categorie, Plat.nom).all()
         
         # Grouper les plats par catégorie
         menu_par_categorie = {}
         for plat in plats:
-            categorie = plat['categorie'] or 'Autres'
+            categorie = plat.categorie or 'Autres'
             if categorie not in menu_par_categorie:
                 menu_par_categorie[categorie] = []
-            menu_par_categorie[categorie].append(dict(plat))
+            menu_par_categorie[categorie].append({
+                'id': plat.id,
+                'nom': plat.nom,
+                'description': plat.description,
+                'prix': plat.prix,
+                'categorie': plat.categorie,
+                'image': plat.image
+            })
             
         return render_template('admin_menu.html', 
                             menu_par_categorie=menu_par_categorie)
@@ -347,27 +286,26 @@ def admin_menu():
         app.logger.error(f"Erreur dans la route menu admin: {str(e)}")
         flash('Une erreur est survenue lors du chargement du menu.', 'error')
         return redirect(url_for('accueil'))
-    finally:
-        if 'conn' in locals():
-            conn.close()
+
 
 @app.route('/admin/menu/export_pdf')
 @login_required
 def export_menu_pdf():
     try:
         # Récupérer les données du menu
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM menu ORDER BY categorie, nom')
-        plats = cursor.fetchall()
+        plats = Plat.query.order_by(Plat.categorie, Plat.nom).all()
         
         # Grouper les plats par catégorie
         menu_par_categorie = {}
         for plat in plats:
-            categorie = plat['categorie'] or 'Autres'
+            categorie = plat.categorie or 'Autres'
             if categorie not in menu_par_categorie:
                 menu_par_categorie[categorie] = []
-            menu_par_categorie[categorie].append(dict(plat))
+            menu_par_categorie[categorie].append({
+                'nom': plat.nom,
+                'description': plat.description,
+                'prix': plat.prix
+            })
         
         # Créer le PDF
         response = make_response()
@@ -446,41 +384,32 @@ def export_menu_pdf():
         response.data = pdf
         
         return response
-        
     except Exception as e:
         app.logger.error(f"Erreur lors de la génération du PDF: {str(e)}")
         flash('Une erreur est survenue lors de la génération du PDF.', 'error')
-        return redirect(url_for('admin_menu'))
-    finally:
-        if 'conn' in locals():
-            conn.close()
+        return redirect(url_for('admin_menu'))    
+
+
 
 @app.route('/supprimer_plat/<int:plat_id>', methods=['POST'])
 def supprimer_plat(plat_id):
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM menu WHERE id = ?', (plat_id,))
-        conn.commit()
+        plat = Plat.query.get_or_404(plat_id)
+        db.session.delete(plat)
+        db.session.commit()
         flash('Plat supprimé avec succès!', 'success')
     except Exception as e:
         flash(f'Erreur lors de la suppression du plat: {str(e)}', 'error')
-    finally:
-        conn.close()
     return redirect(url_for('menu'))
 
 @app.route('/admin/reservation/supprimer/<int:id>', methods=['POST'])
 @login_required
 def supprimer_reservation(id):
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            # Supprimer d'abord les entrées liées dans la table de liaison
-            cursor.execute('DELETE FROM reservations_plats WHERE reservation_id = ?', (id,))
-            # Puis supprimer la réservation
-            cursor.execute('DELETE FROM reservations WHERE id = ?', (id,))
-            conn.commit()
-            flash('La réservation a été supprimée avec succès.', 'success')
+        reservation = Reservation.query.get_or_404(id)
+        db.session.delete(reservation)
+        db.session.commit()
+        flash('La réservation a été supprimée avec succès.', 'success')
     except Exception as e:
         flash(f'Une erreur est survenue lors de la suppression de la réservation : {str(e)}', 'error')
     
@@ -529,7 +458,6 @@ def extraire_plats_depuis_texte(texte):
         i += 1
     
     return plats
-
 @app.route('/admin/menu/importer', methods=['GET', 'POST'])
 @login_required
 def importer_menu():
@@ -557,23 +485,23 @@ def importer_menu():
                 plats = extraire_plats_depuis_texte(texte_complet)
                 
                 # Enregistrer les plats dans la base de données
-                conn = get_db_connection()
-                cursor = conn.cursor()
                 plats_ajoutes = 0
                 
                 for plat in plats:
                     try:
-                        cursor.execute(
-                            'INSERT INTO menu (nom, description, prix, categorie) VALUES (?, ?, ?, ?)',
-                            (plat['nom'], plat['description'], plat['prix'], plat['categorie'])
+                        nouveau_plat = Plat(
+                            nom=plat['nom'],
+                            description=plat['description'],
+                            prix=plat['prix'],
+                            categorie=plat['categorie']
                         )
+                        db.session.add(nouveau_plat)
                         plats_ajoutes += 1
-                    except sqlite3.IntegrityError:
+                    except Exception:
                         # Ignorer les doublons
                         pass
                 
-                conn.commit()
-                conn.close()
+                db.session.commit()
                 
                 flash(f'Import réussi : {plats_ajoutes} plats ajoutés au menu', 'success')
                 return redirect(url_for('admin_menu'))
@@ -605,18 +533,19 @@ def reserver():
             reference = generate_reference()
             
             # Save to database
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                '''
-                INSERT INTO reservations 
-                (reference, nom, email, telephone, date, heure, personnes, message, statut)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'en_attente')
-                ''',
-                (reference, nom, email, telephone, date_resa, heure, personnes, message)
+            nouvelle_reservation = Reservation(
+                reference=reference,
+                nom=nom,
+                email=email,
+                telephone=telephone,
+                date=date_resa,
+                heure=heure,
+                personnes=personnes,
+                message=message,
+                statut='en_attente'
             )
-            conn.commit()
-            conn.close()
+            db.session.add(nouvelle_reservation)
+            db.session.commit()
             
             flash('Votre réservation a été enregistrée avec succès!', 'success')
             return redirect(url_for('confirmation', reference=reference))
@@ -632,43 +561,31 @@ def reserver():
 @app.route('/admin/reservation/modifier/<int:id>', methods=['GET', 'POST'])
 @login_required
 def modifier_reservation(id):
-    conn = get_db_connection()
     try:
+        reservation = Reservation.query.get_or_404(id)
+        
         if request.method == 'POST':
             # Récupérer les données du formulaire
-            nom = request.form.get('nom')
-            email = request.form.get('email')
-            telephone = request.form.get('telephone')
-            date = request.form.get('date')
-            heure = request.form.get('heure')
-            personnes = request.form.get('personnes')
-            message = request.form.get('message', '')
-            statut = request.form.get('statut')
+            reservation.nom = request.form.get('nom')
+            reservation.email = request.form.get('email')
+            reservation.telephone = request.form.get('telephone')
+            reservation.date = request.form.get('date')
+            reservation.heure = request.form.get('heure')
+            reservation.personnes = int(request.form.get('personnes', 1))
+            reservation.message = request.form.get('message', '')
+            reservation.statut = request.form.get('statut')
             
-            # Mettre à jour la réservation dans la base de données
-            cursor = conn.cursor()
-            cursor.execute(
-                '''
-                UPDATE reservations 
-                SET nom = ?, email = ?, telephone = ?, date = ?, 
-                    heure = ?, personnes = ?, message = ?, statut =?
-                WHERE id =?
-                ''',
-                (nom, email, telephone, date, heure, personnes, message, statut, id)
-            )
-            conn.commit()
-            
+            db.session.commit()
             flash('La réservation a été mise à jour avec succès.', 'success')
             return redirect(url_for('afficher_toutes_reservations'))
         
         # Pour les requêtes GET, afficher le formulaire de modification
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM reservations WHERE id = ?', (id,))
-        reservation = cursor.fetchone()
+        return render_template('modifier_reservation.html', reservation=reservation)
         
-        if reservation is None:
-            flash('Réservation non trouvée.', 'error')
-            return redirect(url_for('afficher_toutes_reservations'))
+    except Exception as e:
+        app.logger.error(f"Erreur lors de la modification de la réservation: {str(e)}")
+        flash('Une erreur est survenue lors de la modification de la réservation.', 'error')
+        return redirect(url_for('afficher_toutes_reservations'))
             
         return render_template('modifier_reservation.html', reservation=dict(reservation))
         
@@ -682,26 +599,20 @@ def modifier_reservation(id):
 @app.route('/confirmation/<reference>')
 def confirmation(reference):
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM reservations WHERE reference = ?', (reference,))
-        reservation = cursor.fetchone()
+        reservation = Reservation.query.filter_by(reference=reference).first()
         
         if reservation is None:
             flash('Réservation non trouvée.', 'error')
             return redirect(url_for('accueil'))
             
-        # Convert Row to dict for easier template access
-        reservation = dict(reservation)
-        
         # Format the date for display
-        if 'date' in reservation and reservation['date']:
+        if reservation.date:
             try:
-                date_obj = datetime.strptime(str(reservation['date']), '%Y-%m-%d')
-                reservation['date'] = date_obj.strftime('%d/%m/%Y')
+                date_obj = datetime.strptime(str(reservation.date), '%Y-%m-%d')
+                reservation.date_formatted = date_obj.strftime('%d/%m/%Y')
             except (ValueError, TypeError) as e:
                 app.logger.error(f"Erreur de formatage de date: {e}")
-                pass
+                reservation.date_formatted = reservation.date
                 
         return render_template('confirmation.html', reservation=reservation)
         
@@ -709,9 +620,7 @@ def confirmation(reference):
         app.logger.error(f"Erreur lors de la récupération de la réservation: {str(e)}")
         flash('Une erreur est survenue lors de la récupération de votre réservation.', 'error')
         return redirect(url_for('accueil'))
-    finally:
-        if 'conn' in locals():
-            conn.close()
+   
 
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0',port=5000)

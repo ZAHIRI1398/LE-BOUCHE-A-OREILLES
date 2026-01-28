@@ -44,3 +44,11 @@ git add main.py templates/reservation_form.html
 git commit -m "Correction du formulaire de réservation et de la page de confirmation"
 rm -Force .git/index.lock
 git push origin main
+###Où les images sont utilisées :
+Page d'accueil (accueil.html) : affiche plat1.jpg, plat2.jpg, dessert.jpg et restaurant-interior.jpg
+Page du menu (menu.html) : utilise les images plat0.jpg à plat3.jpg en boucle
+Page d'administration du menu (admin_menu.html) : utilise également les images plat0.jpg à plat3.jpg
+1-git add static/images/*
+2-git status
+3-rm -Force .git/index.lock
+git push origin main
