@@ -117,8 +117,8 @@ def creer_reservation():
         message = request.form.get('message', '')
         
         try:
-            # Importer ici pour éviter l'importation circulaire
-            from main import db, Reservation
+            # Importer depuis models pour éviter l'importation circulaire
+            from models import db, Reservation
             
             # Générer une référence unique
             import random

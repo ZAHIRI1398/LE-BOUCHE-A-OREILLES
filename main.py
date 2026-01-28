@@ -15,6 +15,9 @@ import re
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 
+# Importation des modèles
+from models import db, Plat, Reservation
+
 # Importation du blueprint de réservation
 from reservation_client import reservation_bp
 
@@ -35,35 +38,12 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 300
 }
-db = SQLAlchemy(app)
+
+# Initialiser la base de données avec l'application
+db.init_app(app)
+
 # Configuration de logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Modèles de données
-class Plat(db.Model):
-    __tablename__ = 'menu'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    nom = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text)
-    prix = db.Column(db.Float, nullable=False)
-    categorie = db.Column(db.String(50), nullable=False)
-    image = db.Column(db.String(200))
-
-class Reservation(db.Model):
-    __tablename__ = 'reservations'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    reference = db.Column(db.String(20), unique=True, nullable=False)
-    nom = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), nullable=False)
-    telephone = db.Column(db.String(20))
-    date = db.Column(db.String(20), nullable=False)
-    heure = db.Column(db.String(10), nullable=False)
-    personnes = db.Column(db.Integer, nullable=False)
-    message = db.Column(db.Text)
-    statut = db.Column(db.String(20), default='en_attente')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def creer_tables():
     try:
