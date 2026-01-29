@@ -27,6 +27,11 @@
                              class="card-img-top" 
                              alt="{{ plat.nom }}"
                              style="height: 200px; object-fit: cover;">
+                    {% elif 'plat' in categorie_lower %}
+                        <img src="{{ url_for('static', filename='images/plat_principal.jpg') }}" 
+                             class="card-img-top" 
+                             alt="{{ plat.nom }}"
+                             style="height: 200px; object-fit: cover;">
                     {% else %}
                         <img src="{{ url_for('static', filename='images/default.jpg') }}" 
                              class="card-img-top" 
