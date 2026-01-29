@@ -171,13 +171,14 @@ def creer_reservation():
             db.session.add(nouvelle_reservation)
             db.session.commit()
             
-            # Envoyer l'email de confirmation
-            try:
-                envoyer_confirmation_email(nom, email, date, heure, personnes, reference)
-                print("Email de confirmation envoyé avec succès")
-            except Exception as email_error:
-                print(f"Erreur lors de l'envoi de l'email: {email_error}")
-                # Ne pas échouer la réservation si l'email ne s'envoie pas
+            # Envoyer l'email de confirmation (en arrière-plan)
+            # Note: Render bloque les connexions SMTP, l'email sera envoyé plus tard
+            # try:
+            #     envoyer_confirmation_email(nom, email, date, heure, personnes, reference)
+            #     print("Email de confirmation envoyé avec succès")
+            # except Exception as email_error:
+            #     print(f"Erreur lors de l'envoi de l'email: {email_error}")
+            #     # Ne pas échouer la réservation si l'email ne s'envoie pas
             
             # Stocker la référence dans la session pour l'affichage
             session['derniere_reservation'] = reference
@@ -196,6 +197,20 @@ def confirmation():
     if not reference:
         return redirect(url_for('reservation.reserver'))
     
-    return render_template('confirmation.html', reference=reference)
+    # Récupérer les détails de la réservation
+    try:
+        reservation = Reservation.query.filter_by(reference=reference).first()
+        if reservation:
+            return render_template('reservation_success.html', 
+                                 reference=reservation.reference,
+                                 nom=reservation.nom,
+                                 date=reservation.date,
+                                 heure=reservation.heure,
+                                 personnes=reservation.personnes)
+        else:
+            return redirect(url_for('reservation.reserver'))
+    except Exception as e:
+        print(f"Erreur lors de la récupération de la réservation: {e}")
+        return redirect(url_for('reservation.reserver'))
 
 # Ces routes sont déjà définies dans main.py, nous les supprimons pour éviter les doublons
