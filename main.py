@@ -12,6 +12,9 @@ from reportlab.lib.units import inch
 from io import BytesIO
 import PyPDF2
 import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 
@@ -505,47 +508,10 @@ def importer_menu():
     
     return render_template('importer_menu.html')
 
-@app.route('/reserver', methods=['GET', 'POST'])
+@app.route('/reserver')
 def reserver():
-    if request.method == 'POST':
-        try:
-            # Get form data
-            nom = request.form.get('nom')
-            email = request.form.get('email')
-            telephone = request.form.get('telephone')
-            personnes = int(request.form.get('personnes', 1))
-            date_resa = request.form.get('date')
-            heure = request.form.get('heure')
-            message = request.form.get('message', '')
-            
-            # Generate a unique reference
-            reference = generate_reference()
-            
-            # Save to database
-            nouvelle_reservation = Reservation(
-                reference=reference,
-                nom=nom,
-                email=email,
-                telephone=telephone,
-                date=date_resa,
-                heure=heure,
-                personnes=personnes,
-                message=message,
-                statut='en_attente'
-            )
-            db.session.add(nouvelle_reservation)
-            db.session.commit()
-            
-            flash('Votre réservation a été enregistrée avec succès!', 'success')
-            return redirect(url_for('confirmation', reference=reference))
-            
-        except Exception as e:
-            app.logger.error(f"Erreur lors de l'enregistrement de la réservation: {str(e)}")
-            flash('Une erreur est survenue lors de l\'enregistrement de votre réservation.', 'error')
-            return redirect(url_for('reserver'))
-    
-    # For GET request, show the reservation form
-    return render_template('reservation_form.html', today=date.today().isoformat())
+    """Rediriger vers le blueprint de réservation pour maintenir la compatibilité"""
+    return redirect(url_for('reservation.reserver'))
 
 @app.route('/admin/reservation/modifier/<int:id>', methods=['GET', 'POST'])
 @login_required
@@ -572,18 +538,10 @@ def modifier_reservation(id):
         return render_template('modifier_reservation.html', reservation=reservation)
         
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Erreur lors de la modification de la réservation: {str(e)}")
         flash('Une erreur est survenue lors de la modification de la réservation.', 'error')
         return redirect(url_for('afficher_toutes_reservations'))
-            
-        return render_template('modifier_reservation.html', reservation=dict(reservation))
-        
-    except Exception as e:
-        app.logger.error(f"Erreur lors de la modification de la réservation: {str(e)}")
-        flash('Une erreur est survenue lors de la modification de la réservation.', 'error')
-        return redirect(url_for('afficher_toutes_reservations'))
-    finally:
-        conn.close()
 
 @app.route('/confirmation/<reference>')
 def confirmation(reference):
