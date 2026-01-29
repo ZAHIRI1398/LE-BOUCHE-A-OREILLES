@@ -17,17 +17,17 @@
             <div class="col-md-6 col-lg-4 mb-4">
                 <div class="card h-100">
                     {% if categorie == "Boissons" %}
-                        <img src="{{ url_for('static', filename='images/plat0.jpg') }}" 
+                        <img src="{{ url_for('static', filename='images/boissons.jpg') }}" 
                              class="card-img-top" 
                              alt="{{ plat.nom }}"
                              style="height: 200px; object-fit: cover;">
                     {% elif categorie == "Desserts" %}
-                        <img src="{{ url_for('static', filename='images/dessert.jpg') }}" 
+                        <img src="{{ url_for('static', filename='images/dessert_menu.jpg') }}" 
                              class="card-img-top" 
                              alt="{{ plat.nom }}"
                              style="height: 200px; object-fit: cover;">
                     {% else %}
-                        <img src="{{ url_for('static', filename='images/plat1.jpg') }}" 
+                        <img src="{{ url_for('static', filename='images/plat_principal.png') }}" 
                              class="card-img-top" 
                              alt="{{ plat.nom }}"
                              style="height: 200px; object-fit: cover;">
