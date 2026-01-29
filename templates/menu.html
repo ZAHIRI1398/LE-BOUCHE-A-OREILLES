@@ -16,18 +16,18 @@
             {% for plat in plats %}
             <div class="col-md-6 col-lg-4 mb-4">
                 <div class="card h-100">
-                    {% if categorie == "Boissons" %}
-                        <img src="{{ url_for('static', filename='images/boissons.jpg') }}" 
+                    {% if categorie == "Boissons" or categorie == "boissons" or categorie == "Boisson" or categorie == "boisson" %}
+                        <img src="{{ url_for('static', filename='images/boisson.jpg') }}" 
                              class="card-img-top" 
                              alt="{{ plat.nom }}"
                              style="height: 200px; object-fit: cover;">
-                    {% elif categorie == "Desserts" %}
+                    {% elif categorie == "Desserts" or categorie == "desserts" or categorie == "Dessert" or categorie == "dessert" %}
                         <img src="{{ url_for('static', filename='images/dessert_menu.jpg') }}" 
                              class="card-img-top" 
                              alt="{{ plat.nom }}"
                              style="height: 200px; object-fit: cover;">
                     {% else %}
-                        <img src="{{ url_for('static', filename='images/plat_principal.png') }}" 
+                        <img src="{{ url_for('static', filename='images/plat_principal.jpg') }}" 
                              class="card-img-top" 
                              alt="{{ plat.nom }}"
                              style="height: 200px; object-fit: cover;">

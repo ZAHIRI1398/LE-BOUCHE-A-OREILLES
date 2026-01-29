@@ -52,3 +52,14 @@ Page d'administration du menu (admin_menu.html) : utilise également les images 
 2-git status
 3-rm -Force .git/index.lock
 git push origin main
+🏠 Page d'accueil (images uniques) :
+
+plat1.jpg - Entrée du Chef
+plat2.jpg - Plat Signature
+dessert.jpg - Dessert Maison
+restaurant-interior.jpg - Photo du restaurant
+🍽️ Page du menu (images par catégorie) :
+
+Boissons : boissons.jpg
+Desserts : dessert_menu.jpg
+Plats principaux : plat_principal.png
