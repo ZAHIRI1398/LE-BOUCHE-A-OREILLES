@@ -11,10 +11,10 @@ reservation_bp = Blueprint('reservation', __name__)
 # Configuration de l'email (à remplacer par vos informations SMTP)
 SMTP_SERVER = 'smtp.gmail.com'
 SMTP_PORT = 587
-SMTP_USERNAME = 'jemathsia@gmail.com'  # À remplacer
-SMTP_PASSWORD = 'uwvq aiqx caos xfcg'     # À remplacer
-EMAIL_FROM = 'jemathsia@gmail.com'     # À remplacer
-EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Bouche à Oreille'
+SMTP_USERNAME = 'adamyamine1398@gmail.com'  # À remplacer
+SMTP_PASSWORD = 'baky mvuv lfpr giuv'     # À remplacer
+EMAIL_FROM = 'adamyamine1398@gmail.com'     # À remplacer
+EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 
 # Plus besoin de ces fonctions - nous utilisons SQLAlchemy
 
@@ -23,10 +23,14 @@ def reserver():
     return render_template('reservation_form.html')
 
 def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
+    print(f"🚀 Début de l'envoi d'email à {email} pour la réservation {reference}")
+    
     try:
         # Formatage de la date
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         date_formatee = date_obj.strftime('%d/%m/%Y')
+        
+        print(f"📅 Date formatée: {date_formatee}")
         
         # Création du message
         msg = MIMEMultipart()
@@ -56,7 +60,7 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
             
             <div style="background-color: #e9ecef; padding: 15px; border-radius: 10px; text-align: center;">
                 <p style="margin: 0; color: #6c757d;">Nous vous remercions pour votre confiance et nous réjouissons de vous accueillir dans notre établissement.</p>
-                <p style="margin: 10px 0 0 0; color: #6c757d;"><strong>Cordialement,<br>L'équipe du Restaurant Bouche à Oreille</strong></p>
+                <p style="margin: 10px 0 0 0; color: #6c757d;"><strong>Cordialement,<br>L'équipe du Restaurant Le Bouche à Oreilles</strong></p>
             </div>
         </body>
         </html>
@@ -64,45 +68,70 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         
         msg.attach(MIMEText(body, 'html'))
         
-        # Connexion au serveur SMTP et envoi avec retry
-        print(f"Tentative d'envoi d'email à {email}...")
+        print(f"📧 Message préparé, connexion à {SMTP_SERVER}:{SMTP_PORT}")
+        print(f"👤 Utilisateur SMTP: {SMTP_USERNAME}")
         
-        # Configuration SMTP avec retry
+        # Configuration SMTP avec retry et debug
         max_retries = 3
         for attempt in range(max_retries):
             try:
+                print(f"🔄 Tentative {attempt + 1}/{max_retries}")
+                
                 with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                    print(f"Tentative {attempt + 1}/{max_retries} - Connexion au serveur SMTP...")
+                    server.set_debuglevel(1)  # Activer le debug SMTP
+                    
+                    print("🔗 Connexion au serveur SMTP...")
                     server.ehlo()
-                    print("Démarrage du chiffrement TLS...")
+                    
+                    print("🔐 Démarrage du chiffrement TLS...")
                     server.starttls()
                     server.ehlo()
-                    print("Authentification...")
+                    
+                    print("🔑 Authentification...")
                     server.login(SMTP_USERNAME, SMTP_PASSWORD)
-                    print("Envoi du message...")
+                    print("✅ Authentification réussie!")
+                    
+                    print("📤 Envoi du message...")
                     server.send_message(msg)
-                    print("✅ Email envoyé avec succès!")
+                    print("🎉 Email envoyé avec succès!")
                     return True
                     
             except smtplib.SMTPAuthenticationError as e:
                 print(f"❌ Erreur d'authentification SMTP: {str(e)}")
-                print("Vérifiez vos identifiants SMTP et assurez-vous que l'accès aux applications moins sécurisées est activé.")
-                break  # Pas de retry pour les erreurs d'authentification
+                print("💡 Solutions possibles:")
+                print("   1. Vérifiez que le mot de passe d'application Gmail est correct")
+                print("   2. Activez l'accès aux applications moins sécurisées dans Gmail")
+                print("   3. Vérifiez que le mot de passe d'application n'a pas expiré")
+                return False  # Pas de retry pour les erreurs d'authentification
+                
+            except smtplib.SMTPRecipientsRefused as e:
+                print(f"❌ Destinataire refusé: {str(e)}")
+                print(f"   Email du destinataire: {email}")
+                return False
+                
             except smtplib.SMTPException as e:
                 print(f"⚠️ Erreur SMTP (tentative {attempt + 1}): {str(e)}")
                 if attempt == max_retries - 1:
                     break
+                print("⏳ Nouvelle tentative dans 2 secondes...")
+                import time
+                time.sleep(2)
                 continue
+                
             except Exception as e:
                 print(f"⚠️ Erreur inattendue (tentative {attempt + 1}): {str(e)}")
                 if attempt == max_retries - 1:
                     break
                 continue
         
+        print("❌ Échec de l'envoi après toutes les tentatives")
         return False
             
     except Exception as e:
         print(f"❌ Erreur critique lors de la préparation de l'email: {str(e)}")
+        import traceback
+        print("📋 Traceback complet:")
+        traceback.print_exc()
         return False
 
 @reservation_bp.route('/creer_reservation', methods=['POST'])
