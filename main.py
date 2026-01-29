@@ -31,9 +31,9 @@ app.secret_key = 'votre_cle_secrète_plus_secrete_encore_123456'
 basedir = Path(__file__).parent
 DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{basedir}/data/restaurant.db')
 
-# Utiliser pg8000 comme driver PostgreSQL pour éviter les problèmes de compatibilité
+# Utiliser psycopg2 comme driver PostgreSQL pour une meilleure stabilité SSL
 if DATABASE_URL and DATABASE_URL.startswith('postgresql://'):
-    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+pg8000://')
+    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+psycopg2://')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
