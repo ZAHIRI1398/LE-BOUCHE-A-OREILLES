@@ -16,11 +16,22 @@
             {% for plat in plats %}
             <div class="col-md-6 col-lg-4 mb-4">
                 <div class="card h-100">
-                    {% set image_index = loop.index0 % 4 %}
-                    <img src="{{ url_for('static', filename='images/plat' ~ image_index ~ '.jpg') }}" 
-                         class="card-img-top" 
-                         alt="{{ plat.nom }}"
-                         style="height: 200px; object-fit: cover;">
+                    {% if categorie == "Boissons" %}
+                        <img src="{{ url_for('static', filename='images/plat0.jpg') }}" 
+                             class="card-img-top" 
+                             alt="{{ plat.nom }}"
+                             style="height: 200px; object-fit: cover;">
+                    {% elif categorie == "Desserts" %}
+                        <img src="{{ url_for('static', filename='images/dessert.jpg') }}" 
+                             class="card-img-top" 
+                             alt="{{ plat.nom }}"
+                             style="height: 200px; object-fit: cover;">
+                    {% else %}
+                        <img src="{{ url_for('static', filename='images/plat1.jpg') }}" 
+                             class="card-img-top" 
+                             alt="{{ plat.nom }}"
+                             style="height: 200px; object-fit: cover;">
+                    {% endif %}
                     <div class="card-body p-2">
                         <div class="d-flex justify-content-between align-items-start">
                             <h5 class="card-title mb-1" style="font-size: 0.9rem;">{{ plat.nom }}</h5>
