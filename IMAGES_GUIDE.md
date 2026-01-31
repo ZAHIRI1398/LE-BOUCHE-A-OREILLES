@@ -7,17 +7,20 @@ Images actuellement utilisées ✅ :
 - `dessert.jpg` - Dessert Maison
 - `restaurant-interior.jpg` - Photo du restaurant
 
-## 🍽️ Page du Menu (menu.html)
-### Configuration actuelle (avec images existantes) :
-- **Boissons** : utilise `plat0.jpg` 
-- **Desserts** : utilise `dessert.jpg`
-- **Plats principaux** : utilise `plat1.jpg`
+## 🍽️ Page du menu (menu.html) :
+### Configuration complète avec images dédiées :
+- **Entrées** : utilise `entree.jpg` 🆕
+- **Boissons** : utilise `boisson.jpg` 
+- **Desserts** : utilise `dessert_menu.jpg`
+- **Plats principaux** : utilise `plat_principal.jpg`
+- **Autres** : utilise `default.jpg` (image par défaut)
 
-### Pour utiliser des images spécifiques :
-Ajoutez ces 3 images dans le dossier `static/images/` :
-- `boisson.jpg` - Pour la catégorie Boissons
-- `plat_principal.jpg` - Pour les plats principaux
-- `dessert_menu.jpg` - Pour les desserts (différent de l'accueil)
+### Détection intelligente par mots-clés :
+- Contient "entree" ou "entrée" → `entree.jpg`
+- Contient "boisson" → `boisson.jpg`
+- Contient "dessert" → `dessert_menu.jpg`
+- Contient "plat" → `plat_principal.jpg`
+- Autres → `default.jpg`
 
 ## 📋 Étapes pour ajouter les nouvelles images :
 
@@ -30,13 +33,15 @@ Ajoutez ces 3 images dans le dossier `static/images/` :
    ```
    static/
    └── images/
-       ├── plat1.jpg ✅ (existe)
-       ├── plat2.jpg ✅ (existe)
-       ├── dessert.jpg ✅ (existe)
-       ├── restaurant-interior.jpg ✅ (existe)
-       ├── boisson.jpg 🆕 (à ajouter)
-       ├── plat_principal.jpg 🆕 (à ajouter)
-       └── dessert_menu.jpg 🆕 (à ajouter)
+       ├── plat1.jpg ✅ (existe - accueil)
+       ├── plat2.jpg ✅ (existe - accueil)
+       ├── dessert.jpg ✅ (existe - accueil)
+       ├── restaurant-interior.jpg ✅ (existe - accueil)
+       ├── entree.jpg ✅ (existe - menu entrées)
+       ├── boisson.jpg ✅ (existe - menu boissons)
+       ├── plat_principal.jpg ✅ (existe - menu plats)
+       ├── dessert_menu.jpg ✅ (existe - menu desserts)
+       └── default.jpg ✅ (existe - image par défaut)
    ```
 
 3. **Vérifiez avec le script** :
