@@ -96,6 +96,13 @@ def admin_logout():
 @login_required
 def afficher_toutes_reservations():
     try:
+        # Vérifier si la table reservations existe
+        inspector = db.inspect(db.engine)
+        if 'reservations' not in inspector.get_table_names():
+            app.logger.error("La table 'reservations' n'existe pas dans la base de données")
+            flash("La base de données n'est pas initialisée correctement. Veuillez contacter l'administrateur.", "error")
+            return redirect(url_for('accueil'))
+        
         reservations = Reservation.query.order_by(Reservation.date.desc(), Reservation.heure.desc()).all()
         
         # Ajouter la date et l'heure actuelles pour l'impression
@@ -105,7 +112,10 @@ def afficher_toutes_reservations():
                              now=datetime.now())
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
-        flash("Une erreur est survenue lors de la récupération des réservations.", "error")
+        app.logger.error(f"Type d'erreur: {type(e).__name__}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        flash(f"Une erreur est survenue lors de la récupération des réservations: {str(e)}", "error")
         return redirect(url_for('accueil'))
 
 
@@ -223,6 +233,13 @@ def changer_statut(id):
 @app.route('/carte')
 def menu():
     try:
+        # Vérifier si la table menu existe
+        inspector = db.inspect(db.engine)
+        if 'menu' not in inspector.get_table_names():
+            app.logger.error("La table 'menu' n'existe pas dans la base de données")
+            flash("La base de données n'est pas initialisée correctement. Veuillez contacter l'administrateur.", "error")
+            return redirect(url_for('accueil'))
+        
         plats = Plat.query.order_by(Plat.categorie, Plat.nom).all()
         
         # Grouper les plats par catégorie
@@ -249,7 +266,10 @@ def menu():
                             menu_par_categorie=menu_par_categorie)
     except Exception as e:
         app.logger.error(f"Erreur dans la route menu: {str(e)}")
-        flash('Une erreur est survenue lors du chargement du menu.', 'error')
+        app.logger.error(f"Type d'erreur: {type(e).__name__}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        flash(f"Une erreur est survenue lors du chargement du menu: {str(e)}", 'error')
         return redirect(url_for('accueil'))
 @app.route('/admin/menu')
 @login_required
