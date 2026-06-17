@@ -439,33 +439,34 @@ def generate_reference():
 def extraire_plats_depuis_texte(texte):
     """
     Extrait les plats, descriptions et prix à partir du texte brut du PDF
-    Cette fonction est basique et devra être adaptée selon le format de votre PDF
+    Format attendu : 3 lignes par plat (nom, description, prix)
     """
     plats = []
-    # Ceci est un exemple très basique - à adapter selon votre format de PDF
-    # On cherche les lignes qui ressemblent à des plats (nom, description, prix)
     lignes = [ligne.strip() for ligne in texte.split('\n') if ligne.strip()]
     
     i = 0
     while i < len(lignes):
         ligne = lignes[i]
-        # Si la ligne contient un prix (format XX.XX€ ou XX,XX€)
-        match = re.search(r'(\d+[,\.]\d+)\s*€?$', ligne)
+        # Si la ligne contient un prix (format XX.XX€, XX,XX€, XX.XX, XX,XX)
+        match = re.search(r'(\d+[,.]\d+)\s*€?$', ligne)
         if match:
-            prix = match.group(1).replace(',', '.')
+            prix_str = match.group(1).replace(',', '.')
             try:
-                prix = float(prix)
+                prix = float(prix_str)
                 # On suppose que la ligne précédente est la description
                 # et celle d'avant est le nom
                 if i >= 2:
                     nom = lignes[i-2]
                     description = lignes[i-1]
-                    plats.append({
-                        'nom': nom,
-                        'description': description,
-                        'prix': prix,
-                        'categorie': 'plat_principal'  # Par défaut
-                    })
+                    # Ignorer si le nom ressemble à un prix (éviter les faux positifs)
+                    if not re.search(r'^\d+[,.]\d+', nom):
+                        plats.append({
+                            'nom': nom,
+                            'description': description,
+                            'prix': prix,
+                            'categorie': 'plat_principal'  # Par défaut
+                        })
+                        i += 1  # Sauter la ligne suivante pour éviter les doublons
             except ValueError:
                 pass
         i += 1
