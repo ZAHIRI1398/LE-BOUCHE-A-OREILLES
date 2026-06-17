@@ -49,9 +49,15 @@
                     </li>
                 </ul>
                 <div class="d-flex">
-                    <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light">
-                        <i class="fas fa-lock me-1"></i> Admin
-                    </a>
+                    {% if session.get('admin_logged_in') %}
+                        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger">
+                            <i class="fas fa-sign-out-alt me-1"></i> Déconnexion
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light">
+                            <i class="fas fa-lock me-1"></i> Admin
+                        </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
