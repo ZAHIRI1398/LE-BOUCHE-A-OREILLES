@@ -1,19 +1,15 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
 from flask_login import login_required
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 from datetime import datetime
+import os
 
 # Création d'un Blueprint pour les routes de réservation
 reservation_bp = Blueprint('reservation', __name__)
 
-# Configuration de l'email (à remplacer par vos informations SMTP)
-SMTP_SERVER = 'smtp.gmail.com'
-SMTP_PORT = 587
-SMTP_USERNAME = 'adamyamine1398@gmail.com'  # À remplacer
-SMTP_PASSWORD = 'baky mvuv lfpr giuv'     # À remplacer
-EMAIL_FROM = 'adamyamine1398@gmail.com'     # À remplacer
+# Configuration de Resend
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', 're_hctYz5TC_CLWPnyiNbUHhGZn4iRZz1MVp')
+EMAIL_FROM = 'onboarding@resend.dev'  # Email par défaut de Resend (à personnaliser)
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 
 # Plus besoin de ces fonctions - nous utilisons SQLAlchemy
@@ -26,20 +22,17 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi d'email à {email} pour la réservation {reference}")
     
     try:
+        # Initialiser Resend
+        resend.api_key = RESEND_API_KEY
+        
         # Formatage de la date
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         date_formatee = date_obj.strftime('%d/%m/%Y')
         
         print(f"📅 Date formatée: {date_formatee}")
         
-        # Création du message
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_FROM
-        msg['To'] = email
-        msg['Subject'] = EMAIL_SUBJECT
-        
         # Corps du message en HTML
-        body = f"""
+        html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #28a745;">
@@ -66,69 +59,21 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         </html>
         """
         
-        msg.attach(MIMEText(body, 'html'))
+        # Envoyer l'email via Resend
+        params = {
+            "from": EMAIL_FROM,
+            "to": [email],
+            "subject": EMAIL_SUBJECT,
+            "html": html_content
+        }
         
-        print(f"📧 Message préparé, connexion à {SMTP_SERVER}:{SMTP_PORT}")
-        print(f"👤 Utilisateur SMTP: {SMTP_USERNAME}")
-        
-        # Configuration SMTP avec retry et debug
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                print(f"🔄 Tentative {attempt + 1}/{max_retries}")
-                
-                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                    server.set_debuglevel(1)  # Activer le debug SMTP
-                    
-                    print("🔗 Connexion au serveur SMTP...")
-                    server.ehlo()
-                    
-                    print("🔐 Démarrage du chiffrement TLS...")
-                    server.starttls()
-                    server.ehlo()
-                    
-                    print("🔑 Authentification...")
-                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
-                    print("✅ Authentification réussie!")
-                    
-                    print("📤 Envoi du message...")
-                    server.send_message(msg)
-                    print("🎉 Email envoyé avec succès!")
-                    return True
-                    
-            except smtplib.SMTPAuthenticationError as e:
-                print(f"❌ Erreur d'authentification SMTP: {str(e)}")
-                print("💡 Solutions possibles:")
-                print("   1. Vérifiez que le mot de passe d'application Gmail est correct")
-                print("   2. Activez l'accès aux applications moins sécurisées dans Gmail")
-                print("   3. Vérifiez que le mot de passe d'application n'a pas expiré")
-                return False  # Pas de retry pour les erreurs d'authentification
-                
-            except smtplib.SMTPRecipientsRefused as e:
-                print(f"❌ Destinataire refusé: {str(e)}")
-                print(f"   Email du destinataire: {email}")
-                return False
-                
-            except smtplib.SMTPException as e:
-                print(f"⚠️ Erreur SMTP (tentative {attempt + 1}): {str(e)}")
-                if attempt == max_retries - 1:
-                    break
-                print("⏳ Nouvelle tentative dans 2 secondes...")
-                import time
-                time.sleep(2)
-                continue
-                
-            except Exception as e:
-                print(f"⚠️ Erreur inattendue (tentative {attempt + 1}): {str(e)}")
-                if attempt == max_retries - 1:
-                    break
-                continue
-        
-        print("❌ Échec de l'envoi après toutes les tentatives")
-        return False
+        print(f"� Envoi via Resend API...")
+        r = resend.Emails.send(params)
+        print(f"✅ Email envoyé avec succès! ID: {r['id']}")
+        return True
             
     except Exception as e:
-        print(f"❌ Erreur critique lors de la préparation de l'email: {str(e)}")
+        print(f"❌ Erreur lors de l'envoi de l'email: {str(e)}")
         import traceback
         print("📋 Traceback complet:")
         traceback.print_exc()
@@ -171,10 +116,9 @@ def creer_reservation():
             db.session.add(nouvelle_reservation)
             db.session.commit()
             
-            # Envoyer l'email de confirmation
+            # Envoyer l'email de confirmation via Resend
             try:
                 envoyer_confirmation_email(nom, email, date, heure, personnes, reference)
-                print("Email de confirmation envoyé avec succès")
             except Exception as email_error:
                 print(f"Erreur lors de l'envoi de l'email: {email_error}")
                 # Ne pas échouer la réservation si l'email ne s'envoie pas
