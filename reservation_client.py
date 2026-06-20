@@ -12,6 +12,9 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY', 're_M3M9wyeg_D9vgh9eCmJSvaMow9
 EMAIL_FROM = 'onboarding@resend.dev'  # Email par défaut de Resend (à personnaliser)
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 
+# Pour les tests avec Resend gratuit, rediriger tous les emails vers votre adresse
+TEST_EMAIL_REDIRECT = 'adamyamine1398@gmail.com'  # Changez ceci pour les tests
+
 # Plus besoin de ces fonctions - nous utilisons SQLAlchemy
 
 @reservation_bp.route('/reserver')
@@ -59,10 +62,13 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         </html>
         """
         
+        # Pour les tests Resend gratuit, rediriger vers votre email
+        recipient_email = TEST_EMAIL_REDIRECT if TEST_EMAIL_REDIRECT else email
+        
         # Envoyer l'email via Resend
         params = {
             "from": EMAIL_FROM,
-            "to": [email],
+            "to": [recipient_email],
             "subject": EMAIL_SUBJECT,
             "html": html_content
         }
