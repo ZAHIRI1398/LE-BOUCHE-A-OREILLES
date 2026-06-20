@@ -171,14 +171,13 @@ def creer_reservation():
             db.session.add(nouvelle_reservation)
             db.session.commit()
             
-            # Envoyer l'email de confirmation (en arrière-plan)
-            # Note: Render bloque les connexions SMTP, l'email sera envoyé plus tard
-            # try:
-            #     envoyer_confirmation_email(nom, email, date, heure, personnes, reference)
-            #     print("Email de confirmation envoyé avec succès")
-            # except Exception as email_error:
-            #     print(f"Erreur lors de l'envoi de l'email: {email_error}")
-            #     # Ne pas échouer la réservation si l'email ne s'envoie pas
+            # Envoyer l'email de confirmation
+            try:
+                envoyer_confirmation_email(nom, email, date, heure, personnes, reference)
+                print("Email de confirmation envoyé avec succès")
+            except Exception as email_error:
+                print(f"Erreur lors de l'envoi de l'email: {email_error}")
+                # Ne pas échouer la réservation si l'email ne s'envoie pas
             
             # Stocker la référence dans la session pour l'affichage
             session['derniere_reservation'] = reference
