@@ -8,7 +8,7 @@ import os
 reservation_bp = Blueprint('reservation', __name__)
 
 # Configuration de Resend
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', 're_hctYz5TC_CLWPnyiNbUHhGZn4iRZz1MVp')
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', 're_M3M9wyeg_D9vgh9eCmJSvaMow9CjSjVsL')
 EMAIL_FROM = 'onboarding@resend.dev'  # Email par défaut de Resend (à personnaliser)
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 
