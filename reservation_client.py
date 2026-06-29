@@ -14,8 +14,8 @@ EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Or
 EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
 
 # Pour les tests avec Resend gratuit, rediriger tous les emails vers votre adresse
-TEST_EMAIL_REDIRECT = 'adamyamine1398@gmail.com'  # Changez ceci pour les tests
 
+TEST_EMAIL_REDIRECT = os.environ.get('TEST_EMAIL_REDIRECT', '')
 # Plus besoin de ces fonctions - nous utilisons SQLAlchemy
 
 @reservation_bp.route('/reserver')
