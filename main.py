@@ -22,7 +22,11 @@ from pathlib import Path
 from models import db, Plat, Reservation
 
 # Importation du blueprint de réservation
-from reservation_client import reservation_bp
+from reservation_client import (
+    reservation_bp,
+    envoyer_confirmation_email,
+    envoyer_annulation_email,
+)
 
 app = Flask(__name__)
 app.register_blueprint(reservation_bp, url_prefix='/reservation')
@@ -221,8 +225,28 @@ def changer_statut(id):
     
     try:
         reservation = Reservation.query.get_or_404(id)
+        ancien_statut = reservation.statut
         reservation.statut = nouveau_statut
         db.session.commit()
+
+        # Envoyer l'email au client uniquement après la décision de l'admin,
+        # et seulement lorsque le statut change réellement.
+        if nouveau_statut != ancien_statut:
+            try:
+                if nouveau_statut == 'confirmee':
+                    envoyer_confirmation_email(
+                        reservation.nom, reservation.email, reservation.date,
+                        reservation.heure, reservation.personnes, reservation.reference
+                    )
+                elif nouveau_statut == 'annulee':
+                    envoyer_annulation_email(
+                        reservation.nom, reservation.email, reservation.date,
+                        reservation.heure, reservation.personnes, reservation.reference
+                    )
+            except Exception as email_error:
+                # Ne pas échouer la mise à jour du statut si l'email ne part pas
+                app.logger.error(f"Erreur lors de l'envoi de l'email: {email_error}")
+
         flash(f'Le statut de la réservation a été mis à jour avec succès.', 'success')
     except Exception as e:
         app.logger.error(f"Erreur lors de la mise à jour du statut: {e}")
@@ -542,6 +566,7 @@ def modifier_reservation(id):
         reservation = Reservation.query.get_or_404(id)
         
         if request.method == 'POST':
+            ancien_statut = reservation.statut
             # Récupérer les données du formulaire
             reservation.nom = request.form.get('nom')
             reservation.email = request.form.get('email')
@@ -553,6 +578,24 @@ def modifier_reservation(id):
             reservation.statut = request.form.get('statut')
             
             db.session.commit()
+
+            # Notifier le client uniquement lorsque l'admin fait passer
+            # la réservation à "confirmee" ou "annulee".
+            if reservation.statut != ancien_statut:
+                try:
+                    if reservation.statut == 'confirmee':
+                        envoyer_confirmation_email(
+                            reservation.nom, reservation.email, reservation.date,
+                            reservation.heure, reservation.personnes, reservation.reference
+                        )
+                    elif reservation.statut == 'annulee':
+                        envoyer_annulation_email(
+                            reservation.nom, reservation.email, reservation.date,
+                            reservation.heure, reservation.personnes, reservation.reference
+                        )
+                except Exception as email_error:
+                    app.logger.error(f"Erreur lors de l'envoi de l'email: {email_error}")
+
             flash('La réservation a été mise à jour avec succès.', 'success')
             return redirect(url_for('afficher_toutes_reservations'))
         
