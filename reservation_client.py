@@ -11,6 +11,7 @@ reservation_bp = Blueprint('reservation', __name__)
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', 're_M3M9wyeg_D9vgh9eCmJSvaMow9CjSjVsL')
 EMAIL_FROM = 'contact@leboucheaoreilles.be'  # Email par défaut de Resend (à personnaliser)
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
+EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
 
 # Pour les tests avec Resend gratuit, rediriger tous les emails vers votre adresse
 TEST_EMAIL_REDIRECT = 'adamyamine1398@gmail.com'  # Changez ceci pour les tests
@@ -85,6 +86,70 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         traceback.print_exc()
         return False
 
+def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
+    print(f"🚀 Début de l'envoi de l'email d'annulation à {email} pour la réservation {reference}")
+
+    try:
+        # Initialiser Resend
+        resend.api_key = RESEND_API_KEY
+
+        # Formatage de la date
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        date_formatee = date_obj.strftime('%d/%m/%Y')
+
+        print(f"📅 Date formatée: {date_formatee}")
+
+        # Corps du message en HTML
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
+                <h2 style="color: #dc3545; margin-top: 0;">❌ Annulation de réservation</h2>
+                <p>Bonjour <strong>{nom}</strong>,</p>
+                <p>Nous sommes au regret de vous informer que votre réservation a été annulée.</p>
+            </div>
+
+            <div style="background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 10px; margin: 20px 0;">
+                <h3 style="color: #495057; border-bottom: 2px solid #dc3545; padding-bottom: 10px;">Détails de la réservation annulée</h3>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin: 10px 0;"><strong>📋 Référence :</strong> {reference}</li>
+                    <li style="margin: 10px 0;"><strong>📅 Date :</strong> {date_formatee}</li>
+                    <li style="margin: 10px 0;"><strong>🕐 Heure :</strong> {heure}</li>
+                    <li style="margin: 10px 0;"><strong>👥 Nombre de personnes :</strong> {personnes}</li>
+                </ul>
+            </div>
+
+            <div style="background-color: #e9ecef; padding: 15px; border-radius: 10px; text-align: center;">
+                <p style="margin: 0; color: #6c757d;">Pour toute question ou pour effectuer une nouvelle réservation, n'hésitez pas à nous contacter.</p>
+                <p style="margin: 10px 0 0 0; color: #6c757d;"><strong>Cordialement,<br>L'équipe du Restaurant Le Bouche à Oreilles</strong></p>
+            </div>
+        </body>
+        </html>
+        """
+
+        # Pour les tests Resend gratuit, rediriger vers votre email
+        recipient_email = TEST_EMAIL_REDIRECT if TEST_EMAIL_REDIRECT else email
+
+        # Envoyer l'email via Resend
+        params = {
+            "from": EMAIL_FROM,
+            "to": [recipient_email],
+            "subject": EMAIL_SUBJECT_ANNULATION,
+            "html": html_content
+        }
+
+        print(f"📨 Envoi via Resend API...")
+        r = resend.Emails.send(params)
+        print(f"✅ Email d'annulation envoyé avec succès! ID: {r['id']}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Erreur lors de l'envoi de l'email d'annulation: {str(e)}")
+        import traceback
+        print("📋 Traceback complet:")
+        traceback.print_exc()
+        return False
+
 @reservation_bp.route('/creer_reservation', methods=['POST'])
 def creer_reservation():
     if request.method == 'POST':
@@ -122,12 +187,8 @@ def creer_reservation():
             db.session.add(nouvelle_reservation)
             db.session.commit()
             
-            # Envoyer l'email de confirmation via Resend
-            try:
-                envoyer_confirmation_email(nom, email, date, heure, personnes, reference)
-            except Exception as email_error:
-                print(f"Erreur lors de l'envoi de l'email: {email_error}")
-                # Ne pas échouer la réservation si l'email ne s'envoie pas
+            # Aucun email n'est envoyé à la création : le client est notifié
+            # uniquement lorsque l'administrateur confirme ou annule la réservation.
             
             # Stocker la référence dans la session pour l'affichage
             session['derniere_reservation'] = reference
