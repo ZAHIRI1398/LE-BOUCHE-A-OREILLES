@@ -13,8 +13,11 @@ EMAIL_FROM = 'contact@leboucheaoreilles.be'  # Email par défaut de Resend (à p
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
 
-# Pour les tests avec Resend gratuit, rediriger tous les emails vers votre adresse
-TEST_EMAIL_REDIRECT = 'adamyamine1398@gmail.com'  # Changez ceci pour les tests
+# Redirection des emails (tests uniquement) : si défini, tous les emails sont
+# envoyés à cette adresse au lieu de celle du client. Vide par défaut en
+# production => les emails partent vers l'adresse réelle du client.
+# Pour activer la redirection en test : variable d'env TEST_EMAIL_REDIRECT.
+TEST_EMAIL_REDIRECT = os.environ.get('TEST_EMAIL_REDIRECT', '')
 
 # Plus besoin de ces fonctions - nous utilisons SQLAlchemy
 
