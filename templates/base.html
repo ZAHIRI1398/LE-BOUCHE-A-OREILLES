@@ -12,7 +12,7 @@
     <style>
         body {
             padding-top: 60px;
-            background-color: #ee4e14;
+            background-color: #ffffff;
         }
         .navbar-brand {
             font-weight: 600;
@@ -82,40 +82,27 @@
     <!-- Pied de page -->
     <footer class="footer">
         <div class="container">
+            {% block footer_info %}
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <h5>Horaires</h5>
-                    <ul class="list-unstyled">
-                        <li>Lun-Ven:11h55 - 13h35 </li>
-                        
-                    </ul>
+                    <p class="mb-0">
+                        Le midi en période scolaire, du lundi au vendredi
+                        (uniquement sur réservation).
+                    </p>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <h5>Contact</h5>
                     <ul class="list-unstyled">
-                        <li><i class="fas fa-phone me-2"></i> 0471243279</li>
-                        <li><i class="fas fa-envelope me-2"></i> contact@leboucheaoreilles.be</li>
-                        <li><i class="fas fa-map-marker-alt me-2"></i> Square du Sacré-Coeur 2/A
-1160 Auderghem</li>
+                        <li><i class="fas fa-phone me-2"></i> 0471/24.32.79</li>
+                        <li><i class="fas fa-envelope me-2"></i> stbernadette.restaurant@gmail.com</li>
+                        <li><i class="fas fa-map-marker-alt me-2"></i> Square du Sacré-Coeur 2/A, 1160 Auderghem</li>
                     </ul>
                 </div>
-                <div class="col-md-4">
-                    <h5>Suivez-nous</h5>
-                    <div class="social-links">
-                         <a href="https://www.facebook.com/https://www.facebook.com/groups/29975828052/posts/10160125057428053/" target="_blank" class="text-white me-2" title="Facebook">
-                             <i class="fab fa-facebook-f fa-lg"></i>
-                         </a>
-                         <a href="https://www.instagram.com/votrecommpte" target="_blank" class="text-white me-2" title="Instagram">
-                             <i class="fab fa-instagram fa-lg"></i>
-                         </a>
-                         <a href="https://www.tripadvisor.com/restaurant/votrerestaurant" target="_blank" class="text-white me-2" title="TripAdvisor">
-                             <i class="fab fa-tripadvisor fa-lg"></i>
-                         </a>
-       </div>
-                </div>
             </div>
+            {% endblock %}
             <div class="text-center mt-4">
-                <p class="mb-0">&copy; 2026 Restaurant LE BOUCHE À OREILLES. Tous droits réservés.</p>
+                <p class="mb-0">&copy; 2026 Le Bouche à Oreilles — Restaurant didactique de l'École Sainte-Bernadette.</p>
             </div>
         </div>
     </footer>

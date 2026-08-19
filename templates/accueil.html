@@ -1,108 +1,146 @@
 <!-- templates/accueil.html -->
 {% extends "base.html" %}
 
-{% block title %}Accueil - BOUCHE A OREILLE{% endblock %}
+{% block title %}Accueil - Le Bouche à Oreilles{% endblock %}
+
+{% block footer_info %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero-photo { position: relative; }
+    .hero-photo img { width: 100%; height: 420px; object-fit: cover; }
+    .hero-photo img.hero-logo {
+        position: absolute; top: 20px; left: 20px; width: 110px; height: 110px;
+        border-radius: 50%; box-shadow: 0 2px 10px rgba(0,0,0,.3); object-fit: cover;
+    }
+    .hero-actions { position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: .6rem; }
+    .btn-hero {
+        background: #cf7a3e; border: 2px solid #4a2f1f; color: #fff; font-weight: 700;
+        border-radius: 50px; padding: .5rem 1.5rem;
+    }
+    .btn-hero:hover { background: #b5652e; color: #fff; }
+
+    .band-intro { background: #BF6026; color: #fff; padding: 2rem 0; }
+    .band-formule { background: #BF6026; color: #fff; padding: 3rem 0; }
+
+    .photo-collage { display: flex; gap: 1rem; align-items: flex-start; }
+    .photo-collage img {
+        flex: 1 1 0; width: 50%; height: 280px; object-fit: cover;
+        border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.2);
+    }
+    .photo-collage .photo-2 { margin-top: 2rem; }
+
+    .formule-list { list-style: none; padding: 0; margin: 0 0 2rem; }
+    .formule-list li { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .formule-list .icon-badge {
+        width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.15);
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .contact-icon {
+        width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,.15);
+        display: inline-flex; align-items: center; justify-content: center; margin-right: .75rem;
+    }
+    .footer-logo-band img { max-width: 320px; width: 100%; height: auto; }
+    .band-white { background: #ffffff; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="hero-section text-center py-3 mb-4 bg-light" style="padding-top: 1.5rem !important; padding-bottom: 1.5rem !important;">
+<!-- Hero -->
+<div class="hero-photo mb-0">
+    <img src="{{ url_for('static', filename='images/hero-salle.jpg') }}" alt="Salle du restaurant Le Bouche à Oreilles">
+    <img src="{{ url_for('static', filename='images/logo-sainte-bernadette.png') }}" alt="Logo Restaurant Didactique - Établissement Sainte-Bernadette" class="hero-logo">
+    <div class="hero-actions">
+        <a href="{{ url_for('menu') }}" class="btn btn-hero">Menu</a>
+        <a href="{{ url_for('reservation.reserver') }}" class="btn btn-hero">Réserver</a>
+    </div>
+</div>
+
+<!-- Bandeau intro -->
+<div class="band-intro text-center">
     <div class="container">
-        <h1 class="display-5 mb-2" style="font-size: 2rem;">Bienvenue au Restaurant LE BOUCHE À OREILLES</h1>
-        <p class="lead mb-3" style="font-size: 1.1rem;">Découvrez une expérience culinaire exceptionnelle</p>
-        <div class="mt-2">
-            <a href="{{ url_for('reservation.reserver') }}" class="btn btn-primary btn-lg me-3">
-                <i class="fas fa-calendar-plus me-2"></i>Réserver une table
-            </a>
-            <a href="{{ url_for('menu') }}" class="btn btn-outline-secondary btn-lg">
-                <i class="fas fa-utensils me-2"></i>Voir le menu
-            </a>
+        <p class="mb-0 fs-5">
+            Le Bouche à Oreilles est le restaurant didactique de l'École Sainte-Bernadette,
+            un établissement d'enseignement secondaire spécialisé.
+        </p>
+    </div>
+</div>
+
+<!-- Nos élèves en action -->
+<div class="band-white">
+<div class="container py-5">
+    <div class="row align-items-center g-5">
+        <div class="col-md-6">
+            <h2 class="fw-bold mb-4">Nos élèves en action</h2>
+            <p>
+                Ici, ce sont nos élèves des sections Cuisine et Salle qui préparent et
+                servent chaque repas, sous l'encadrement de leurs professeurs.
+            </p>
+            <p>
+                Chaque service est pour eux une mise en situation réelle : l'accueil des
+                clients, la mise en place, la prise de commande, le service à table...
+                Ces compétences leur sont transmises tout au long de leur formation,
+                à leur rythme et avec un accompagnement personnalisé.
+            </p>
+        </div>
+        <div class="col-md-6">
+            <div class="photo-collage">
+                <img src="{{ url_for('static', filename='images/eleves-service-1.jpg') }}" alt="Élèves en service" class="photo-1">
+                <img src="{{ url_for('static', filename='images/eleves-service-2.jpg') }}" alt="Élève en salle" class="photo-2">
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Formule / réservation / horaire / contact -->
+<div class="band-formule">
+    <div class="container">
+        <div class="row g-5 align-items-start">
+            <div class="col-md-6">
+                <p class="fs-5">
+                    En réservant une table chez nous, vous soutenez l'apprentissage
+                    de nos élèves tout en profitant d'un vrai repas préparé avec soin.
+                </p>
+
+                <h3 class="fw-bold mt-4 mb-3">Notre formule à 17,50 €</h3>
+                <ul class="formule-list">
+                    <li><span class="icon-badge"><i class="fas fa-martini-glass"></i></span> Apéritif (avec ou sans alcool)</li>
+                    <li><span class="icon-badge"><i class="fas fa-leaf"></i></span> Entrée (accompagnée d'un verre de vin)</li>
+                    <li><span class="icon-badge"><i class="fas fa-utensils"></i></span> Plat (accompagné d'un verre de vin)</li>
+                    <li><span class="icon-badge"><i class="fas fa-ice-cream"></i></span> Dessert</li>
+                    <li><span class="icon-badge"><i class="fas fa-mug-hot"></i></span> Café ou thé</li>
+                    <li><span class="icon-badge"><i class="fas fa-glass-whiskey"></i></span> Boissons (eau à volonté)</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <div class="photo-collage">
+                    <img src="{{ url_for('static', filename='images/plat-formule-1.jpg') }}" alt="Plat de la formule" class="photo-1">
+                    <img src="{{ url_for('static', filename='images/plat-formule-2.jpg') }}" alt="Plat de la formule" class="photo-2">
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-5 mt-4 pt-4 border-top border-light border-opacity-25">
+            <div class="col-md-6">
+                <h4 class="fw-bold mb-3">Horaire</h4>
+                <p class="mb-0">
+                    Le « Bouche à oreilles » vous accueille le midi en période scolaire,
+                    du lundi au vendredi (uniquement sur réservation).
+                </p>
+            </div>
+            <div class="col-md-6">
+                <h4 class="fw-bold mb-3">Nous contacter</h4>
+                <p class="mb-2"><span class="contact-icon"><i class="fas fa-location-dot"></i></span>Square du Sacré-Coeur 2/A, 1160 Auderghem</p>
+                <p class="mb-2"><span class="contact-icon"><i class="fas fa-phone"></i></span>0471/24.32.79</p>
+                <p class="mb-0"><span class="contact-icon"><i class="fas fa-envelope"></i></span>stbernadette.restaurant@gmail.com</p>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="container">
-    <!-- Section À propos -->
-    <div class="row align-items-center mb-5">
-        <div class="col-md-6">
-            <h2 class="mb-4">Notre Restaurant</h2>
-            <p class="lead">Une cuisine raffinée dans une ambiance chaleureuse</p>
-            <p>Découvrez des plats préparés avec des ingrédients frais et de saison par notre chef étoilé. Notre équipe vous accueille dans un cadre élégant et convivial.</p>
-            <a href="{{ url_for('menu') }}" class="btn btn-outline-primary">Découvrir notre carte</a>
-        </div>
-        <div class="col-md-6">
-            <img src="{{ url_for('static', filename='images/restaurant-interior.jpg') }}" 
-                 alt="Notre restaurant" 
-                 class="img-fluid rounded shadow">
-        </div>
-    </div>
-
-    <!-- Section Spécialités -->
-    <div class="row my-5 py-5 bg-light">
-        <div class="col-12 text-center mb-5">
-            <h2>Nos Spécialités</h2>
-            <p class="text-muted">Découvrez nos plats les plus appréciés</p>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <img src="{{ url_for('static', filename='images/plat1.jpg') }}" class="card-img-top" alt="Spécialité 1">
-                <div class="card-body">
-                    <h5 class="card-title">Entrée du Chef</h5>
-                    <p class="card-text">Une délicieuse entrée préparée avec des produits frais du marché.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <img src="{{ url_for('static', filename='images/plat2.jpg') }}" class="card-img-top" alt="Spécialité 2">
-                <div class="card-body">
-                    <h5 class="card-title">Plat Signature</h5>
-                    <p class="card-text">Notre plat phare, une explosion de saveurs à ne pas manquer.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <img src="{{ url_for('static', filename='images/dessert.jpg') }}" class="card-img-top" alt="Dessert">
-                <div class="card-body">
-                    <h5 class="card-title">Dessert Maison</h5>
-                    <p class="card-text">Terminez votre repas en beauté avec notre dessert du jour.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Section Témoignages -->
-    <div class="row my-5 py-5">
-        <div class="col-12 text-center mb-5">
-            <h2>Ils nous font confiance</h2>
-            <p class="text-muted">Découvrez ce que nos clients disent de nous</p>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-quote-left fa-2x text-muted mb-3"></i>
-                    <p class="card-text">"Un restaurant exceptionnel avec une cuisine raffinée et un service irréprochable. Je recommande vivement !"</p>
-                    <p class="text-muted mb-0">- Marie D.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-quote-left fa-2x text-muted mb-3"></i>
-                    <p class="card-text">"L'ambiance est chaleureuse et les plats sont délicieux. Nous y retournons régulièrement en famille."</p>
-                    <p class="text-muted mb-0">- Thomas L.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-quote-left fa-2x text-muted mb-3"></i>
-                    <p class="card-text">"Un véritable coup de cœur pour ce restaurant. Les produits sont frais et la présentation soignée."</p>
-                    <p class="text-muted mb-0">- Sophie M.</p>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- Signature établissement -->
+<div class="text-center py-4 footer-logo-band band-white">
+    <img src="{{ url_for('static', filename='images/logo-footer-sainte-bernadette.png') }}" alt="Établissement Sainte-Bernadette">
 </div>
 {% endblock %}
