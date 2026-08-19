@@ -33,12 +33,13 @@ app.register_blueprint(reservation_bp, url_prefix='/reservation')
 app.secret_key = 'votre_cle_secrète_plus_secrete_encore_123456'
 # Configuration de la base de données
 basedir = Path(__file__).parent
-# Utiliser SQLite en production (Render) pour éviter les problèmes de configuration PostgreSQL
+# En local (pas de DATABASE_URL) : SQLite. Sur Railway avec le plugin PostgreSQL :
+# DATABASE_URL est fourni automatiquement et utilisé tel quel pour une persistance fiable.
 DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{basedir}/data/restaurant.db')
 
-# Forcer SQLite même si DATABASE_URL est défini (pour éviter les erreurs de connexion PostgreSQL)
-if DATABASE_URL and DATABASE_URL.startswith('postgresql'):
-    DATABASE_URL = f'sqlite:///{basedir}/data/restaurant.db'
+# Utiliser psycopg2 comme driver PostgreSQL pour une meilleure stabilité SSL
+if DATABASE_URL and DATABASE_URL.startswith('postgresql://'):
+    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+psycopg2://', 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
