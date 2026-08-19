@@ -10,10 +10,10 @@
                 <div class="card-body p-5">
                     <div class="mb-4">
                         <div class="icon-success mb-3">
-                            <i class="fas fa-check-circle fa-5x text-success"></i>
+                            <i class="fas fa-hourglass-half fa-5x text-warning"></i>
                         </div>
-                        <h1 class="h3 mb-3">Réservation confirmée !</h1>
-                        <p class="lead">Merci, {{ reservation.nom }} ! Votre réservation a bien été enregistrée.</p>
+                        <h1 class="h3 mb-3">Réservation en attente de confirmation</h1>
+                        <p class="lead">Merci, {{ reservation.nom }} ! Votre demande a bien été enregistrée. Notre équipe va l'examiner et vous recevrez un email dès qu'elle sera confirmée.</p>
                     </div>
                     
                     <div class="card border-0 bg-light mb-4">
@@ -43,9 +43,9 @@
                     <div class="alert alert-info">
                         <h3 class="h5 mb-3">Informations importantes</h3>
                         <ul class="text-start">
-                            <li>Veuillez arriver 5 minutes avant l'heure de votre réservation</li>
-                            <li>En cas de retard supérieur à 15 minutes, votre table pourra être réattribuée</li>
-                            <li>Pour toute modification, veuillez nous contacter au 02/673.18.55</li>
+                            <li>Votre réservation n'est pas encore définitive : elle doit être validée par notre équipe</li>
+                            <li>Vous recevrez un email de confirmation (ou, le cas échéant, d'annulation) dès qu'elle aura été traitée</li>
+                            <li>Pour toute question, contactez-nous au 0471/24.32.79</li>
                         </ul>
                     </div>
 
