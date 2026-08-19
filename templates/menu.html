@@ -2,6 +2,19 @@
 {% extends "base.html" %}
 {% block title %}Notre Carte - LE BOUCHE À OREILLES{% endblock %}
 
+{% block extra_css %}
+<style>
+    .menu-item {
+        display: flex; justify-content: space-between; align-items: baseline;
+        gap: 1rem; padding: .6rem 0; border-bottom: 1px dashed #ddd;
+    }
+    .menu-item:last-child { border-bottom: none; }
+    .menu-item-name { font-weight: 600; }
+    .menu-item-desc { color: #6c757d; font-size: .9rem; margin-top: .15rem; }
+    .menu-item-price { font-weight: 600; white-space: nowrap; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container my-5">
     <div class="text-center mb-5">
@@ -9,53 +22,25 @@
         <p class="lead">Découvrez nos délicieuses spécialités</p>
     </div>
 
-    {% for categorie, plats in menu_par_categorie.items() %}
-    <div class="mb-5">
-        <h2 class="border-bottom pb-2 mb-4">{{ categorie }}</h2>
-        <div class="row">
-            {% for plat in plats %}
-            <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card h-100">
-                    {% set categorie_lower = categorie.lower() %}
-                    {% if 'boisson' in categorie_lower %}
-                        <img src="{{ url_for('static', filename='images/boisson.jpg') }}" 
-                             class="card-img-top" 
-                             alt="{{ plat.nom }}"
-                             style="height: 200px; object-fit: cover;">
-                    {% elif 'dessert' in categorie_lower %}
-                        <img src="{{ url_for('static', filename='images/dessert_menu.jpg') }}" 
-                             class="card-img-top" 
-                             alt="{{ plat.nom }}"
-                             style="height: 200px; object-fit: cover;">
-                    {% elif 'entree' in categorie_lower or 'entrée' in categorie_lower %}
-                        <img src="{{ url_for('static', filename='images/entree.jpg') }}" 
-                             class="card-img-top" 
-                             alt="{{ plat.nom }}"
-                             style="height: 200px; object-fit: cover;">
-                    {% elif 'plat' in categorie_lower %}
-                        <img src="{{ url_for('static', filename='images/plat_principal.jpg') }}" 
-                             class="card-img-top" 
-                             alt="{{ plat.nom }}"
-                             style="height: 200px; object-fit: cover;">
-                    {% else %}
-                        <img src="{{ url_for('static', filename='images/default.jpg') }}" 
-                             class="card-img-top" 
-                             alt="{{ plat.nom }}"
-                             style="height: 200px; object-fit: cover;">
-                    {% endif %}
-                    <div class="card-body p-2">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <h5 class="card-title mb-1" style="font-size: 0.9rem;">{{ plat.nom }}</h5>
-                            <span class="badge bg-primary" style="font-size: 0.8rem;">{{ "%.2f"|format(plat.prix) }} €</span>
-                        </div>
-                        <p class="card-text text-muted" style="font-size: 0.8rem; margin-bottom: 0.25rem;">{{ plat.description }}</p>
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            {% for categorie, plats in menu_par_categorie.items() %}
+            <div class="mb-5">
+                <h2 class="border-bottom pb-2 mb-3" style="font-size: 1.4rem;">{{ categorie }}</h2>
+                {% for plat in plats %}
+                <div class="menu-item">
+                    <div>
+                        <div class="menu-item-name">{{ plat.nom }}</div>
+                        {% if plat.description %}
+                        <div class="menu-item-desc">{{ plat.description }}</div>
+                        {% endif %}
                     </div>
+                    <div class="menu-item-price">{{ "%.2f"|format(plat.prix) }} €</div>
                 </div>
+                {% endfor %}
             </div>
             {% endfor %}
         </div>
     </div>
-    {% endfor %}
-
 </div>
 {% endblock %}

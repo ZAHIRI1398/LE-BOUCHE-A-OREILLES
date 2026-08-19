@@ -29,6 +29,7 @@
         border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.2);
     }
     .photo-collage .photo-2 { margin-top: 2rem; }
+    .photo-collage img.photo-faces { object-position: center 15%; }
 
     .formule-list { list-style: none; padding: 0; margin: 0 0 2rem; }
     .formule-list li { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
@@ -85,8 +86,8 @@
         </div>
         <div class="col-md-6">
             <div class="photo-collage">
-                <img src="{{ url_for('static', filename='images/eleves-service-1.jpg') }}" alt="Élèves en service" class="photo-1">
-                <img src="{{ url_for('static', filename='images/eleves-service-2.jpg') }}" alt="Élève en salle" class="photo-2">
+                <img src="{{ url_for('static', filename='images/eleves-service-1.jpg') }}" alt="Élèves en service" class="photo-1 photo-faces">
+                <img src="{{ url_for('static', filename='images/eleves-service-2.jpg') }}" alt="Élève en salle" class="photo-2 photo-faces">
             </div>
         </div>
     </div>
