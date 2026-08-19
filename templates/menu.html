@@ -24,6 +24,9 @@
 
     <div class="row">
         <div class="col-lg-8 mx-auto">
+            {% if not menu_par_categorie %}
+            <p class="text-center text-muted">Le menu est en cours de mise à jour, revenez bientôt.</p>
+            {% endif %}
             {% for categorie, plats in menu_par_categorie.items() %}
             <div class="mb-5">
                 <h2 class="border-bottom pb-2 mb-3" style="font-size: 1.4rem;">{{ categorie }}</h2>
