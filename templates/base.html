@@ -17,6 +17,20 @@
         .navbar-brand {
             font-weight: 600;
         }
+        .navbar-nav .nav-link {
+            font-size: 1.2rem;
+            font-weight: 600;
+            padding: .65rem 1.1rem !important;
+        }
+        .nav-link-highlight {
+            background: #cf7a3e;
+            border-radius: 50px;
+            color: #fff !important;
+            margin-left: .5rem;
+        }
+        .nav-link-highlight:hover {
+            background: #b5652e;
+        }
         .footer {
             background-color: #343a40;
             color: white;
@@ -45,7 +59,7 @@
                         <a class="nav-link" href="{{ url_for('menu') }}">Menu</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('reservation.reserver') }}">Réserver</a>
+                        <a class="nav-link nav-link-highlight" href="{{ url_for('reservation.reserver') }}">Réserver</a>
                     </li>
                 </ul>
                 <div class="d-flex">
