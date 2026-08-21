@@ -22,6 +22,18 @@ class MenuDocument(db.Model):
     nom_fichier = db.Column(db.String(200), nullable=False)
     contenu = db.Column(db.LargeBinary, nullable=False)
     date_upload = db.Column(db.DateTime, default=datetime.utcnow)
+    pages = db.relationship(
+        'MenuDocumentPage', backref='document', cascade='all, delete-orphan',
+        order_by='MenuDocumentPage.numero',
+    )
+
+class MenuDocumentPage(db.Model):
+    __tablename__ = 'menu_document_pages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey('menu_documents.id'), nullable=False)
+    numero = db.Column(db.Integer, nullable=False)
+    image = db.Column(db.LargeBinary, nullable=False)
 
 class Reservation(db.Model):
     __tablename__ = 'reservations'

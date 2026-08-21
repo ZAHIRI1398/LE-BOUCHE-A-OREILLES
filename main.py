@@ -10,6 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from io import BytesIO
+import pymupdf
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -17,7 +18,7 @@ from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 
 # Importation des modèles
-from models import db, Plat, Reservation, MenuDocument
+from models import db, Plat, Reservation, MenuDocument, MenuDocumentPage
 
 # Importation du blueprint de réservation
 from reservation_client import (
@@ -490,7 +491,21 @@ def importer_menu():
 
                 # On ne garde qu'un seul PDF de menu à la fois : le plus récent remplace le précédent
                 MenuDocument.query.delete()
-                db.session.add(MenuDocument(nom_fichier=fichier.filename, contenu=contenu))
+                document = MenuDocument(nom_fichier=fichier.filename, contenu=contenu)
+                db.session.add(document)
+                db.session.flush()
+
+                # On convertit chaque page en image : affichage direct et fiable,
+                # sans dépendre d'un lecteur PDF intégré au navigateur.
+                pdf = pymupdf.open(stream=contenu, filetype="pdf")
+                matrice = pymupdf.Matrix(2, 2)
+                for numero, page in enumerate(pdf, start=1):
+                    pixmap = page.get_pixmap(matrix=matrice)
+                    db.session.add(MenuDocumentPage(
+                        document_id=document.id, numero=numero, image=pixmap.tobytes("png")
+                    ))
+                pdf.close()
+
                 db.session.commit()
 
                 flash('Le menu PDF a été mis à jour avec succès.', 'success')
@@ -517,6 +532,13 @@ def menu_pdf():
     response = make_response(document.contenu)
     response.mimetype = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename="{document.nom_fichier}"'
+    return response
+
+@app.route('/menu/pdf/page/<int:page_id>')
+def menu_pdf_page(page_id):
+    page = MenuDocumentPage.query.get_or_404(page_id)
+    response = make_response(page.image)
+    response.mimetype = 'image/png'
     return response
 
 @app.route('/admin/menu/pdf/supprimer', methods=['POST'])
