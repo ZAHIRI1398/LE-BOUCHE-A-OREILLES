@@ -12,6 +12,11 @@
     .menu-item-name { font-weight: 600; }
     .menu-item-desc { color: #6c757d; font-size: .9rem; margin-top: .15rem; }
     .menu-item-price { font-weight: 600; white-space: nowrap; }
+    .btn-menu-pdf {
+        background: #cf7a3e; border: none; color: #fff; font-weight: 600;
+        border-radius: 50px; padding: .65rem 2rem;
+    }
+    .btn-menu-pdf:hover { background: #b5652e; color: #fff; }
 </style>
 {% endblock %}
 
@@ -19,12 +24,28 @@
 <div class="container my-5">
     <div class="text-center mb-5">
         <h1>Notre Carte</h1>
-        <p class="lead">Découvrez nos délicieuses spécialités</p>
+        <p class="lead">Le menu que préparent nos élèves ce mois-ci</p>
     </div>
+
+    {% if menu_pdf %}
+    <div class="row mb-5">
+        <div class="col-lg-6 mx-auto text-center">
+            <div class="border rounded p-4">
+                <i class="fas fa-file-pdf fa-3x text-danger mb-3"></i>
+                <p class="mb-3">
+                    Retrouvez le détail des menus de la semaine dans notre calendrier mensuel.
+                </p>
+                <a href="{{ url_for('menu_pdf') }}" target="_blank" class="btn btn-menu-pdf">
+                    Voir le menu (PDF)
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="row">
         <div class="col-lg-8 mx-auto">
-            {% if not menu_par_categorie %}
+            {% if not menu_par_categorie and not menu_pdf %}
             <p class="text-center text-muted">Le menu est en cours de mise à jour, revenez bientôt.</p>
             {% endif %}
             {% for categorie, plats in menu_par_categorie.items() %}

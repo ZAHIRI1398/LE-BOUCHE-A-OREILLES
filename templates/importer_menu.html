@@ -7,74 +7,32 @@
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h2 class="h5 mb-0">Importer un menu depuis un PDF</h2>
+                    <h2 class="h5 mb-0">Mettre en ligne le menu PDF</h2>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        Pour de meilleurs résultats, assurez-vous que votre fichier PDF contient les plats
-                        avec un format cohérent (nom, description et prix sur des lignes consécutives).
+                        Sélectionnez n'importe quel PDF (calendrier de menus, carte, etc.) : il sera affiché
+                        tel quel sur la page Menu du site, comme une image. Aucune mise en forme particulière
+                        n'est nécessaire.
                     </div>
-                    
+
                     <form method="post" action="{{ url_for('importer_menu') }}" enctype="multipart/form-data">
                         <div class="mb-4">
                             <label for="fichier" class="form-label">Sélectionnez un fichier PDF</label>
                             <input class="form-control" type="file" id="fichier" name="fichier" accept=".pdf" required>
-                            <div class="form-text">Format accepté : .pdf (taille maximale : 5 Mo)</div>
+                            <div class="form-text">Format accepté : .pdf (taille maximale : 5 Mo). Un nouvel envoi remplace le PDF actuellement en ligne.</div>
                         </div>
-                        
+
                         <div class="d-flex justify-content-between">
                             <a href="{{ url_for('admin_menu') }}" class="btn btn-outline-secondary">
                                 <i class="fas fa-arrow-left me-1"></i> Retour au menu
                             </a>
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-upload me-1"></i> Importer le menu
+                                <i class="fas fa-upload me-1"></i> Mettre en ligne
                             </button>
                         </div>
                     </form>
-                </div>
-            </div>
-            
-            <div class="card mt-4">
-                <div class="card-header bg-light">
-                    <h3 class="h6 mb-0">Format attendu du PDF</h3>
-                </div>
-                <div class="card-body">
-                    <h5 class="mb-3">Structure par plat (3 lignes) :</h5>
-                    <div class="bg-light p-3 rounded mb-3">
-                        <code>
-                            Nom du plat<br>
-                            Description du plat<br>
-                            Prix (ex: 12.50€ ou 12,50€)
-                        </code>
-                    </div>
-                    
-                    <h5 class="mb-3">Exemple concret :</h5>
-                    <div class="bg-light p-3 rounded mb-3">
-                        <code>
-                            Entrecôte Grillée<br>
-                            Viande de bœuf grillée avec sauce au poivre<br>
-                            18.50€<br><br>
-                            
-                            Saumon Poêlé<br>
-                            Filet de saumon frais avec légumes de saison<br>
-                            16.00€
-                        </code>
-                    </div>
-                    
-                    <h5 class="mb-3">Points importants :</h5>
-                    <ul class="mb-0">
-                        <li>Le PDF doit contenir du <strong>texte extractible</strong> (pas d'images scannées)</li>
-                        <li>Chaque plat doit avoir exactement <strong>3 lignes</strong> (nom, description, prix)</li>
-                        <li>Le prix doit être au format <strong>XX.XX€</strong> ou <strong>XX,XX€</strong></li>
-                        <li>Laissez une ligne vide entre chaque plat</li>
-                        <li>Tous les plats seront classés dans la catégorie <strong>"plat_principal"</strong></li>
-                    </ul>
-                    
-                    <div class="alert alert-warning mt-3">
-                        <i class="fas fa-file-alt me-2"></i>
-                        <strong>Conseil :</strong> Consultez le fichier <code>EXEMPLE_FORMAT_MENU.txt</code> dans votre projet pour un exemple complet.
-                    </div>
                 </div>
             </div>
         </div>
