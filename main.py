@@ -53,10 +53,21 @@ db.init_app(app)
 # Configuration de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def migrer_colonnes_manquantes():
+    # Pas d'outil de migration en place : on ajoute ici les colonnes qui
+    # manqueraient sur une base existante, sans toucher aux données.
+    inspector = db.inspect(db.engine)
+    if 'reservations' in inspector.get_table_names():
+        colonnes = {c['name'] for c in inspector.get_columns('reservations')}
+        if 'groupe_reference' not in colonnes:
+            db.session.execute(db.text('ALTER TABLE reservations ADD COLUMN groupe_reference VARCHAR(20)'))
+            db.session.commit()
+
 def creer_tables():
     try:
         with app.app_context():
             db.create_all()
+            migrer_colonnes_manquantes()
             app.logger.info("Tables créées avec succès.")
     except Exception as e:
         app.logger.error(f"Erreur lors de la création des tables: {e}")
@@ -603,26 +614,25 @@ def modifier_reservation(id):
         flash('Une erreur est survenue lors de la modification de la réservation.', 'error')
         return redirect(url_for('afficher_toutes_reservations'))
 
-@app.route('/confirmation/<reference>')
-def confirmation(reference):
+@app.route('/confirmation-groupe/<groupe_reference>')
+def confirmation_groupe(groupe_reference):
     try:
-        reservation = Reservation.query.filter_by(reference=reference).first()
-        
-        if reservation is None:
+        reservations = Reservation.query.filter_by(groupe_reference=groupe_reference).order_by(Reservation.date).all()
+
+        if not reservations:
             flash('Réservation non trouvée.', 'error')
             return redirect(url_for('accueil'))
-            
-        # Format the date for display
-        if reservation.date:
+
+        for reservation in reservations:
             try:
                 date_obj = datetime.strptime(str(reservation.date), '%Y-%m-%d')
                 reservation.date_formatted = date_obj.strftime('%d/%m/%Y')
             except (ValueError, TypeError) as e:
                 app.logger.error(f"Erreur de formatage de date: {e}")
                 reservation.date_formatted = reservation.date
-                
-        return render_template('confirmation.html', reservation=reservation)
-        
+
+        return render_template('confirmation_groupe.html', reservations=reservations, premiere=reservations[0])
+
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération de la réservation: {str(e)}")
         flash('Une erreur est survenue lors de la récupération de votre réservation.', 'error')

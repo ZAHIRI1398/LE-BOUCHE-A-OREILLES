@@ -8,7 +8,7 @@ import os
 reservation_bp = Blueprint('reservation', __name__)
 
 # Configuration de Resend
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', 're_M3M9wyeg_D9vgh9eCmJSvaMow9CjSjVsL')
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 EMAIL_FROM = 'contact@leboucheaoreilles.be'  # Email par défaut de Resend (à personnaliser)
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
@@ -156,46 +156,56 @@ def creer_reservation():
         nom = request.form['nom']
         email = request.form['email']
         telephone = request.form['telephone']
-        date = request.form['date']
         heure = request.form['heure']
         personnes = int(request.form['personnes'])
         message = request.form.get('message', '')
-        
+
+        # Plusieurs dates peuvent être choisies en une seule réservation
+        dates_brutes = request.form.get('dates', '')
+        dates = sorted(set(d.strip() for d in dates_brutes.split(',') if d.strip()))
+
+        if not dates:
+            flash('Veuillez sélectionner au moins une date.', 'error')
+            return redirect(url_for('reservation.reserver'))
+
         try:
             # Importer depuis models pour éviter l'importation circulaire
             from models import db, Reservation
-            
-            # Générer une référence unique
+
             import random
             import string
             chars = string.ascii_uppercase + string.digits
-            reference = 'RES-' + ''.join(random.choices(chars, k=8))
-            
-            # Créer la réservation avec SQLAlchemy
-            nouvelle_reservation = Reservation(
-                reference=reference,
-                nom=nom,
-                email=email,
-                telephone=telephone,
-                date=date,
-                heure=heure,
-                personnes=personnes,
-                message=message,
-                statut='en_attente'
-            )
-            
-            db.session.add(nouvelle_reservation)
+            groupe_reference = 'GRP-' + ''.join(random.choices(chars, k=8))
+
+            for date in dates:
+                reference = 'RES-' + ''.join(random.choices(chars, k=8))
+                nouvelle_reservation = Reservation(
+                    reference=reference,
+                    groupe_reference=groupe_reference,
+                    nom=nom,
+                    email=email,
+                    telephone=telephone,
+                    date=date,
+                    heure=heure,
+                    personnes=personnes,
+                    message=message,
+                    statut='en_attente'
+                )
+                db.session.add(nouvelle_reservation)
+
             db.session.commit()
-            
+
             # Aucun email n'est envoyé à la création : le client est notifié
-            # uniquement lorsque l'administrateur confirme ou annule la réservation.
-            
-            # Stocker la référence dans la session pour l'affichage
-            session['derniere_reservation'] = reference
-            
-            flash(f'Votre réservation a été enregistrée avec succès ! Référence : {reference}', 'success')
-            return redirect(url_for('confirmation', reference=reference))
-            
+            # uniquement lorsque l'administrateur confirme ou annule chaque date.
+
+            session['derniere_reservation'] = groupe_reference
+
+            if len(dates) == 1:
+                flash('Votre réservation a été enregistrée avec succès !', 'success')
+            else:
+                flash(f'Votre réservation a été enregistrée avec succès pour {len(dates)} dates !', 'success')
+            return redirect(url_for('confirmation_groupe', groupe_reference=groupe_reference))
+
         except Exception as e:
             db.session.rollback()
             flash(f'Une erreur est survenue : {str(e)}', 'error')
