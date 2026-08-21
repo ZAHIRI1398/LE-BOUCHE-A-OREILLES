@@ -2,6 +2,56 @@
 {% extends "base.html" %}
 {% block title %}Réserver une Table - BOUCHE A OREILLE{% endblock %}
 
+{% block extra_css %}
+<style>
+    .calendrier-multi {
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        padding: 1rem;
+        background: #fff;
+    }
+    .calendrier-entete {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: .75rem;
+    }
+    .calendrier-entete .mois-label {
+        font-weight: 600; font-size: 1.1rem; text-transform: capitalize;
+    }
+    .calendrier-nav {
+        border: none; background: #f1e7da; color: #cf7a3e; font-weight: 700;
+        width: 36px; height: 36px; border-radius: 50%; font-size: 1.1rem;
+    }
+    .calendrier-nav:disabled { opacity: .35; }
+    .calendrier-grille {
+        display: grid; grid-template-columns: repeat(7, 1fr); gap: .35rem;
+    }
+    .calendrier-jour-nom {
+        text-align: center; font-size: .8rem; font-weight: 600; color: #6c757d;
+        padding-bottom: .25rem;
+    }
+    .calendrier-case {
+        aspect-ratio: 1 / 1; border: 1px solid #e9ecef; border-radius: 8px;
+        background: #fff; font-size: .95rem; display: flex; align-items: center;
+        justify-content: center; cursor: pointer; transition: background .15s, color .15s;
+    }
+    .calendrier-case:hover:not(.indisponible):not(.vide) { background: #f1e7da; }
+    .calendrier-case.vide { visibility: hidden; }
+    .calendrier-case.indisponible { color: #ced4da; cursor: not-allowed; background: #f8f9fa; }
+    .calendrier-case.selectionnee { background: #cf7a3e; color: #fff; font-weight: 700; }
+    .dates-choisies {
+        display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; min-height: 2.5rem;
+    }
+    .date-chip {
+        background: #f1e7da; color: #7a4a24; border-radius: 50px; padding: .35rem .9rem;
+        font-size: .85rem; display: inline-flex; align-items: center; gap: .5rem;
+    }
+    .date-chip button {
+        border: none; background: none; color: #7a4a24; font-weight: 700; line-height: 1;
+        padding: 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container my-5">
     <div class="row justify-content-center">
@@ -11,7 +61,7 @@
                     <h2 class="h4 mb-0">Réserver une table</h2>
                 </div>
                 <div class="card-body p-4">
-                    <form method="POST" action="{{ url_for('reservation.creer_reservation') }}">
+                    <form method="POST" action="{{ url_for('reservation.creer_reservation') }}" id="form-reservation">
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="nom" class="form-label">Nom complet</label>
@@ -50,10 +100,26 @@
                                 </select>
                             </div>
                         </div>
+
                         <div class="mb-3">
-                            <label for="date" class="form-label">Date</label>
-                            <input type="date" class="form-control" id="date" name="date" min="{{ today }}" required>
+                            <label class="form-label">
+                                Dates souhaitées
+                                <span class="text-muted small">(sélectionnez autant de dates que vous le souhaitez)</span>
+                            </label>
+                            <div class="calendrier-multi">
+                                <div class="calendrier-entete">
+                                    <button type="button" class="calendrier-nav" id="mois-precedent" aria-label="Mois précédent">‹</button>
+                                    <span class="mois-label" id="mois-label"></span>
+                                    <button type="button" class="calendrier-nav" id="mois-suivant" aria-label="Mois suivant">›</button>
+                                </div>
+                                <div class="calendrier-grille" id="calendrier-grille"></div>
+                            </div>
+                            <div class="dates-choisies" id="dates-choisies">
+                                <span class="text-muted small">Aucune date sélectionnée pour l'instant.</span>
+                            </div>
+                            <input type="hidden" name="dates" id="dates-input">
                         </div>
+
                         <div class="mb-3">
                             <label for="message" class="form-label">Demandes spéciales (optionnel)</label>
                             <textarea class="form-control" id="message" name="message" rows="3"></textarea>
@@ -73,10 +139,137 @@
 
 {% block extra_js %}
 <script>
-    // Désactiver les dates passées
-    document.addEventListener('DOMContentLoaded', function() {
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('date').min = today;
+document.addEventListener('DOMContentLoaded', function () {
+    const NOMS_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    const NOMS_JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    const MOIS_MAX_AVANCE = 6;
+
+    const aujourdhui = new Date();
+    aujourdhui.setHours(0, 0, 0, 0);
+
+    let moisAffiche = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), 1);
+    const datesSelectionnees = new Set();
+
+    const grilleEl = document.getElementById('calendrier-grille');
+    const labelEl = document.getElementById('mois-label');
+    const precedentBtn = document.getElementById('mois-precedent');
+    const suivantBtn = document.getElementById('mois-suivant');
+    const choisiesEl = document.getElementById('dates-choisies');
+    const inputEl = document.getElementById('dates-input');
+
+    function versISO(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function formatCourt(iso) {
+        const [y, m, d] = iso.split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+        return date.toLocaleDateString('fr-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+
+    function majResume() {
+        const dates = Array.from(datesSelectionnees).sort();
+        inputEl.value = dates.join(',');
+
+        if (dates.length === 0) {
+            choisiesEl.innerHTML = '<span class="text-muted small">Aucune date sélectionnée pour l\'instant.</span>';
+            return;
+        }
+        choisiesEl.innerHTML = dates.map(iso => `
+            <span class="date-chip" data-iso="${iso}">
+                ${formatCourt(iso)}
+                <button type="button" aria-label="Retirer cette date">&times;</button>
+            </span>
+        `).join('');
+
+        choisiesEl.querySelectorAll('.date-chip button').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const iso = this.closest('.date-chip').dataset.iso;
+                datesSelectionnees.delete(iso);
+                majResume();
+                dessinerCalendrier();
+            });
+        });
+    }
+
+    function dessinerCalendrier() {
+        const annee = moisAffiche.getFullYear();
+        const mois = moisAffiche.getMonth();
+
+        labelEl.textContent = `${NOMS_MOIS[mois]} ${annee}`;
+
+        const limiteMax = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth() + MOIS_MAX_AVANCE, 1);
+        precedentBtn.disabled = (annee === aujourdhui.getFullYear() && mois === aujourdhui.getMonth());
+        suivantBtn.disabled = (annee === limiteMax.getFullYear() && mois === limiteMax.getMonth());
+
+        grilleEl.innerHTML = '';
+        NOMS_JOURS.forEach(j => {
+            const el = document.createElement('div');
+            el.className = 'calendrier-jour-nom';
+            el.textContent = j;
+            grilleEl.appendChild(el);
+        });
+
+        const premierJour = new Date(annee, mois, 1);
+        // Lundi = 0 ... Dimanche = 6
+        const decalage = (premierJour.getDay() + 6) % 7;
+        const nbJours = new Date(annee, mois + 1, 0).getDate();
+
+        for (let i = 0; i < decalage; i++) {
+            const el = document.createElement('div');
+            el.className = 'calendrier-case vide';
+            grilleEl.appendChild(el);
+        }
+
+        for (let jour = 1; jour <= nbJours; jour++) {
+            const date = new Date(annee, mois, jour);
+            const iso = versISO(date);
+            const estWeekend = date.getDay() === 0 || date.getDay() === 6;
+            const estPasse = date < aujourdhui;
+
+            const el = document.createElement('div');
+            el.textContent = jour;
+
+            if (estWeekend || estPasse) {
+                el.className = 'calendrier-case indisponible';
+            } else {
+                el.className = 'calendrier-case' + (datesSelectionnees.has(iso) ? ' selectionnee' : '');
+                el.addEventListener('click', function () {
+                    if (datesSelectionnees.has(iso)) {
+                        datesSelectionnees.delete(iso);
+                    } else {
+                        datesSelectionnees.add(iso);
+                    }
+                    majResume();
+                    dessinerCalendrier();
+                });
+            }
+            grilleEl.appendChild(el);
+        }
+    }
+
+    precedentBtn.addEventListener('click', function () {
+        moisAffiche = new Date(moisAffiche.getFullYear(), moisAffiche.getMonth() - 1, 1);
+        dessinerCalendrier();
     });
+    suivantBtn.addEventListener('click', function () {
+        moisAffiche = new Date(moisAffiche.getFullYear(), moisAffiche.getMonth() + 1, 1);
+        dessinerCalendrier();
+    });
+
+    document.getElementById('form-reservation').addEventListener('submit', function (e) {
+        if (datesSelectionnees.size === 0) {
+            e.preventDefault();
+            alert('Merci de sélectionner au moins une date dans le calendrier.');
+        }
+    });
+
+    dessinerCalendrier();
+    majResume();
+});
 </script>
 {% endblock %}

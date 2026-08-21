@@ -187,7 +187,12 @@
                         {% for reservation in reservations %}
                         <tr>
                             <td>{{ reservation.id }}</td>
-                            <td>{{ reservation.nom }}</td>
+                            <td>
+                                {{ reservation.nom }}
+                                {% if reservation.groupe_reference %}
+                                <br><span class="text-muted small" title="Réservation multi-dates">{{ reservation.groupe_reference }}</span>
+                                {% endif %}
+                            </td>
                             <td>{{ reservation.email }}</td>
                             <td>{{ reservation.telephone or '-' }}</td>
                             <td>{{ reservation.date }}</td>
