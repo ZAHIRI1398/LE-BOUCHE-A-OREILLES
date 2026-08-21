@@ -15,6 +15,14 @@ class Plat(db.Model):
     categorie = db.Column(db.String(50), nullable=False)
     image = db.Column(db.String(200))
 
+class MenuDocument(db.Model):
+    __tablename__ = 'menu_documents'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nom_fichier = db.Column(db.String(200), nullable=False)
+    contenu = db.Column(db.LargeBinary, nullable=False)
+    date_upload = db.Column(db.DateTime, default=datetime.utcnow)
+
 class Reservation(db.Model):
     __tablename__ = 'reservations'
     

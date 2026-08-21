@@ -10,8 +10,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from io import BytesIO
-import PyPDF2
-import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -19,7 +17,7 @@ from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 
 # Importation des modèles
-from models import db, Plat, Reservation
+from models import db, Plat, Reservation, MenuDocument
 
 # Importation du blueprint de réservation
 from reservation_client import (
@@ -267,7 +265,7 @@ def menu():
             return redirect(url_for('accueil'))
         
         plats = Plat.query.order_by(Plat.categorie, Plat.nom).all()
-        
+
         # Grouper les plats par catégorie
         menu_par_categorie = {}
         for plat in plats:
@@ -282,14 +280,18 @@ def menu():
                 'categorie': plat.categorie,
                 'image': plat.image
             })
-            
+
+        menu_pdf = MenuDocument.query.order_by(MenuDocument.date_upload.desc()).first()
+
         # Si l'utilisateur est admin, on affiche la vue admin
         if session.get('admin_logged_in'):
-            return render_template('admin_menu.html', 
-                                menu_par_categorie=menu_par_categorie)
+            return render_template('admin_menu.html',
+                                menu_par_categorie=menu_par_categorie,
+                                menu_pdf=menu_pdf)
         # Sinon, on affiche la vue client
-        return render_template('menu.html', 
-                            menu_par_categorie=menu_par_categorie)
+        return render_template('menu.html',
+                            menu_par_categorie=menu_par_categorie,
+                            menu_pdf=menu_pdf)
     except Exception as e:
         app.logger.error(f"Erreur dans la route menu: {str(e)}")
         app.logger.error(f"Type d'erreur: {type(e).__name__}")
@@ -317,9 +319,12 @@ def admin_menu():
                 'categorie': plat.categorie,
                 'image': plat.image
             })
-            
-        return render_template('admin_menu.html', 
-                            menu_par_categorie=menu_par_categorie)
+
+        menu_pdf = MenuDocument.query.order_by(MenuDocument.date_upload.desc()).first()
+
+        return render_template('admin_menu.html',
+                            menu_par_categorie=menu_par_categorie,
+                            menu_pdf=menu_pdf)
     except Exception as e:
         app.logger.error(f"Erreur dans la route menu admin: {str(e)}")
         flash('Une erreur est survenue lors du chargement du menu.', 'error')
@@ -461,42 +466,8 @@ def generate_reference():
     chars = string.ascii_uppercase + string.digits
     return 'RES-' + ''.join(random.choices(chars, k=8))
 
-def extraire_plats_depuis_texte(texte):
-    """
-    Extrait les plats, descriptions et prix à partir du texte brut du PDF
-    Format attendu : 3 lignes par plat (nom, description, prix)
-    """
-    plats = []
-    lignes = [ligne.strip() for ligne in texte.split('\n') if ligne.strip()]
-    
-    i = 0
-    while i < len(lignes):
-        ligne = lignes[i]
-        # Si la ligne contient un prix (format XX.XX€, XX,XX€, XX.XX, XX,XX)
-        match = re.search(r'(\d+[,.]\d+)\s*€?$', ligne)
-        if match:
-            prix_str = match.group(1).replace(',', '.')
-            try:
-                prix = float(prix_str)
-                # On suppose que la ligne précédente est la description
-                # et celle d'avant est le nom
-                if i >= 2:
-                    nom = lignes[i-2]
-                    description = lignes[i-1]
-                    # Ignorer si le nom ressemble à un prix (éviter les faux positifs)
-                    if not re.search(r'^\d+[,.]\d+', nom):
-                        plats.append({
-                            'nom': nom,
-                            'description': description,
-                            'prix': prix,
-                            'categorie': 'plat_principal'  # Par défaut
-                        })
-                        i += 1  # Sauter la ligne suivante pour éviter les doublons
-            except ValueError:
-                pass
-        i += 1
-    
-    return plats
+MENU_PDF_TAILLE_MAX = 5 * 1024 * 1024  # 5 Mo
+
 @app.route('/admin/menu/importer', methods=['GET', 'POST'])
 @login_required
 def importer_menu():
@@ -504,56 +475,57 @@ def importer_menu():
         if 'fichier' not in request.files:
             flash('Aucun fichier sélectionné', 'error')
             return redirect(request.url)
-        
+
         fichier = request.files['fichier']
         if fichier.filename == '':
             flash('Aucun fichier sélectionné', 'error')
             return redirect(request.url)
-        
+
         if fichier and fichier.filename.lower().endswith('.pdf'):
             try:
-                # Lire le contenu du PDF
-                pdf_reader = PyPDF2.PdfReader(fichier)
-                texte_complet = ""
-                
-                # Extraire le texte de chaque page
-                for page in pdf_reader.pages:
-                    texte_complet += page.extract_text() + "\n"
-                
-                # Extraire les plats du texte
-                plats = extraire_plats_depuis_texte(texte_complet)
-                
-                # Enregistrer les plats dans la base de données
-                plats_ajoutes = 0
-                
-                for plat in plats:
-                    try:
-                        nouveau_plat = Plat(
-                            nom=plat['nom'],
-                            description=plat['description'],
-                            prix=plat['prix'],
-                            categorie=plat['categorie']
-                        )
-                        db.session.add(nouveau_plat)
-                        plats_ajoutes += 1
-                    except Exception:
-                        # Ignorer les doublons
-                        pass
-                
+                contenu = fichier.read()
+                if len(contenu) > MENU_PDF_TAILLE_MAX:
+                    flash('Le fichier dépasse la taille maximale autorisée (5 Mo).', 'error')
+                    return redirect(request.url)
+
+                # On ne garde qu'un seul PDF de menu à la fois : le plus récent remplace le précédent
+                MenuDocument.query.delete()
+                db.session.add(MenuDocument(nom_fichier=fichier.filename, contenu=contenu))
                 db.session.commit()
-                
-                flash(f'Import réussi : {plats_ajoutes} plats ajoutés au menu', 'success')
+
+                flash('Le menu PDF a été mis à jour avec succès.', 'success')
                 return redirect(url_for('admin_menu'))
-                
+
             except Exception as e:
+                db.session.rollback()
                 app.logger.error(f'Erreur lors de l\'import du menu : {str(e)}')
                 flash('Une erreur est survenue lors de l\'import du menu', 'error')
                 return redirect(request.url)
         else:
             flash('Format de fichier non supporté. Veuillez sélectionner un fichier PDF.', 'error')
             return redirect(request.url)
-    
+
     return render_template('importer_menu.html')
+
+@app.route('/menu/pdf')
+def menu_pdf():
+    document = MenuDocument.query.order_by(MenuDocument.date_upload.desc()).first()
+    if document is None:
+        flash("Aucun menu PDF n'a encore été mis en ligne.", 'error')
+        return redirect(url_for('menu'))
+
+    response = make_response(document.contenu)
+    response.mimetype = 'application/pdf'
+    response.headers['Content-Disposition'] = f'inline; filename="{document.nom_fichier}"'
+    return response
+
+@app.route('/admin/menu/pdf/supprimer', methods=['POST'])
+@login_required
+def supprimer_menu_pdf():
+    MenuDocument.query.delete()
+    db.session.commit()
+    flash('Le menu PDF a été retiré du site.', 'success')
+    return redirect(url_for('admin_menu'))
 
 @app.route('/reserver')
 def reserver():
