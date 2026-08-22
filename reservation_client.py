@@ -8,15 +8,13 @@ import os
 reservation_bp = Blueprint('reservation', __name__)
 
 # Configuration de Resend
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', 're_VxpPtEic_JwkwKVoFoD2APKApgaKWotvw')
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 EMAIL_FROM = os.environ.get('EMAIL_FROM', 'contact@leboucheaoreilles.be')
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
 
 # Pour les tests avec Resend gratuit, rediriger tous les emails vers votre adresse
-
 TEST_EMAIL_REDIRECT = os.environ.get('TEST_EMAIL_REDIRECT', '')
-# Plus besoin de ces fonctions - nous utilisons SQLAlchemy
 
 @reservation_bp.route('/reserver')
 def reserver():
@@ -24,6 +22,15 @@ def reserver():
 
 def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi d'email à {email} pour la réservation {reference}")
+    
+    # Vérifier que la clé API est configurée
+    if not RESEND_API_KEY:
+        print("⚠️  RESEND_API_KEY non configurée - email non envoyé")
+        print("📝 Pour configurer Resend:")
+        print("   1. Allez sur https://resend.com")
+        print("   2. Créez une clé API")
+        print("   3. Ajoutez RESEND_API_KEY dans les variables d'environnement Railway")
+        return False
     
     try:
         # Initialiser Resend
@@ -74,7 +81,7 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
             "html": html_content
         }
         
-        print(f"� Envoi via Resend API...")
+        print(f"📧 Envoi via Resend API...")
         r = resend.Emails.send(params)
         print(f"✅ Email envoyé avec succès! ID: {r['id']}")
         return True
@@ -88,6 +95,11 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
 
 def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi de l'email d'annulation à {email} pour la réservation {reference}")
+
+    # Vérifier que la clé API est configurée
+    if not RESEND_API_KEY:
+        print("⚠️  RESEND_API_KEY non configurée - email non envoyé")
+        return False
 
     try:
         # Initialiser Resend
@@ -138,7 +150,7 @@ def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
             "html": html_content
         }
 
-        print(f"📨 Envoi via Resend API...")
+        print(f"📧 Envoi via Resend API...")
         r = resend.Emails.send(params)
         print(f"✅ Email d'annulation envoyé avec succès! ID: {r['id']}")
         return True
@@ -219,6 +231,7 @@ def confirmation():
     
     # Récupérer les détails de la réservation
     try:
+        from models import Reservation
         reservation = Reservation.query.filter_by(reference=reference).first()
         if reservation:
             return render_template('reservation_success.html', 
@@ -233,4 +246,3 @@ def confirmation():
         print(f"Erreur lors de la récupération de la réservation: {e}")
         return redirect(url_for('reservation.reserver'))
 
-# Ces routes sont déjà définies dans main.py, nous les supprimons pour éviter les doublons
