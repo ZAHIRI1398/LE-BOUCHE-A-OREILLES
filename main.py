@@ -555,10 +555,19 @@ def menu_pdf_page(page_id):
 @app.route('/admin/menu/pdf/supprimer', methods=['POST'])
 @login_required
 def supprimer_menu_pdf():
-    MenuDocument.query.delete()
-    db.session.commit()
-    flash('Le menu PDF a été retiré du site.', 'success')
+    try:
+        # Supprimer d'abord les pages du document (table enfant)
+        MenuDocumentPage.query.delete()
+        # Puis supprimer les documents (table parente)
+        MenuDocument.query.delete()
+        db.session.commit()
+        flash('Le menu PDF a été retiré du site.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Erreur lors de la suppression du menu PDF: {str(e)}")
+        flash('Une erreur est survenue lors de la suppression du menu PDF.', 'error')
     return redirect(url_for('admin_menu'))
+
 
 @app.route('/reserver')
 def reserver():
