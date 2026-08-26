@@ -93,6 +93,7 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         print("📋 Traceback complet:")
         traceback.print_exc()
         return False
+
 def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi de l'email d'annulation à {email} pour la réservation {reference}")
 
@@ -162,6 +163,70 @@ def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
         traceback.print_exc()
         return False
 
+def envoyer_reception_email(nom, email, date, heure, personnes, reference):
+    """Email envoyé au client dès la création de la demande, pour accuser
+    réception. Il ne s'agit PAS d'une confirmation : la confirmation (ou
+    annulation) sera envoyée par l'administrateur ultérieurement."""
+    print(f"🚀 Début de l'envoi de l'email de réception à {email} pour la réservation {reference}")
+
+    if not RESEND_API_KEY:
+        print("⚠️  RESEND_API_KEY non configurée - email non envoyé")
+        return False
+
+    try:
+        resend.api_key = RESEND_API_KEY
+
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        date_formatee = date_obj.strftime('%d/%m/%Y')
+
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #17a2b8;">
+                <h2 style="color: #17a2b8; margin-top: 0;">📨 Réception de votre demande</h2>
+                <p>Bonjour <strong>{nom}</strong>,</p>
+                <p>Nous avons bien reçu votre demande de réservation. Elle est actuellement <strong>en attente de validation</strong> par notre équipe.</p>
+            </div>
+
+            <div style="background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 10px; margin: 20px 0;">
+                <h3 style="color: #495057; border-bottom: 2px solid #17a2b8; padding-bottom: 10px;">Détails de votre demande</h3>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin: 10px 0;"><strong>📋 Référence :</strong> {reference}</li>
+                    <li style="margin: 10px 0;"><strong>📅 Date :</strong> {date_formatee}</li>
+                    <li style="margin: 10px 0;"><strong>🕐 Heure :</strong> {heure}</li>
+                    <li style="margin: 10px 0;"><strong>👥 Nombre de personnes :</strong> {personnes}</li>
+                </ul>
+            </div>
+
+            <div style="background-color: #e9ecef; padding: 15px; border-radius: 10px; text-align: center;">
+                <p style="margin: 0; color: #6c757d;">Nous reviendrons vers vous très prochainement pour confirmer votre réservation.</p>
+                <p style="margin: 10px 0 0 0; color: #6c757d;"><strong>Cordialement,<br>L'équipe du Restaurant Le Bouche à Oreilles</strong></p>
+            </div>
+        </body>
+        </html>
+        """
+
+        recipient_email = TEST_EMAIL_REDIRECT if TEST_EMAIL_REDIRECT else email
+
+        params = {
+            "from": EMAIL_FROM,
+            "to": [recipient_email],
+            "subject": EMAIL_SUBJECT_RECEPTION,
+            "html": html_content
+        }
+
+        print(f"📧 Envoi via Resend API...")
+        r = resend.Emails.send(params)
+        print(f"✅ Email de réception envoyé avec succès! ID: {r['id']}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Erreur lors de l'envoi de l'email de réception: {str(e)}")
+        import traceback
+        print("📋 Traceback complet:")
+        traceback.print_exc()
+        return False
+
 @reservation_bp.route('/creer_reservation', methods=['POST'])
 def creer_reservation():
     if request.method == 'POST':
@@ -214,9 +279,9 @@ def creer_reservation():
             # client pour chaque date réservée, sans attendre la validation
             # de l'administrateur. L'admin recevra toujours un email dédié
             # lorsqu'il confirme ou annule chaque date individuellement.
-            # envoyer_confirmation_email() gère elle-même le cas où Resend
+            # envoyer_reception_email() gère elle-même le cas où Resend
             # n'est pas configuré (log d'un avertissement, pas d'exception).
-           for reservation in reservations_creees:
+            for reservation in reservations_creees:
                 try:
                     envoyer_reception_email(
                         reservation.nom,
@@ -227,7 +292,7 @@ def creer_reservation():
                         reservation.reference
                     )
                 except Exception as email_error:
-                    # Ne pas ffor reservation in reservations_creees:aire échouer la création de la réservation
+                    # Ne pas faire échouer la création de la réservation
                     # si l'envoi de l'email de réception échoue.
                     print(f"⚠️  Erreur lors de l'envoi de l'email de réception au client: {email_error}")
 
