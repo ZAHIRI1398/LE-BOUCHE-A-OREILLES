@@ -189,6 +189,8 @@ def creer_reservation():
             chars = string.ascii_uppercase + string.digits
             groupe_reference = 'GRP-' + ''.join(random.choices(chars, k=8))
 
+            reservations_creees = []
+
             for date in dates:
                 reference = 'RES-' + ''.join(random.choices(chars, k=8))
                 nouvelle_reservation = Reservation(
@@ -204,11 +206,30 @@ def creer_reservation():
                     statut='en_attente'
                 )
                 db.session.add(nouvelle_reservation)
+                reservations_creees.append(nouvelle_reservation)
 
             db.session.commit()
 
-            # Aucun email n'est envoyé à la création : le client est notifié
-            # uniquement lorsque l'administrateur confirme ou annule chaque date.
+            # Envoyer immédiatement un email de confirmation de réception au
+            # client pour chaque date réservée, sans attendre la validation
+            # de l'administrateur. L'admin recevra toujours un email dédié
+            # lorsqu'il confirme ou annule chaque date individuellement.
+            # envoyer_confirmation_email() gère elle-même le cas où Resend
+            # n'est pas configuré (log d'un avertissement, pas d'exception).
+            for reservation in reservations_creees:
+                try:
+                    envoyer_confirmation_email(
+                        reservation.nom,
+                        reservation.email,
+                        reservation.date,
+                        reservation.heure,
+                        reservation.personnes,
+                        reservation.reference
+                    )
+                except Exception as email_error:
+                    # Ne pas faire échouer la création de la réservation
+                    # si l'envoi de l'email de confirmation échoue.
+                    print(f"⚠️  Erreur lors de l'envoi de l'email de confirmation au client: {email_error}")
 
             session['derniere_reservation'] = groupe_reference
 
