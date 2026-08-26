@@ -29,7 +29,7 @@
 
     {% if menu_pdf %}
     <div class="row mb-5">
-        <div class="col-lg-10 mx-auto text-center">
+        <div class="col-12 text-center">
             {% for page in menu_pdf.pages %}
             <img src="{{ url_for('menu_pdf_page', page_id=page.id) }}" alt="Menu, page {{ page.numero }}"
                  class="img-fluid rounded shadow-sm mb-4" style="border: 1px solid #ddd;">
