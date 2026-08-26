@@ -509,7 +509,7 @@ def importer_menu():
                 # On convertit chaque page en image : affichage direct et fiable,
                 # sans dépendre d'un lecteur PDF intégré au navigateur.
                 pdf = pymupdf.open(stream=contenu, filetype="pdf")
-                matrice = pymupdf.Matrix(2, 2)
+                matrice = pymupdf.Matrix(3, 3)
                 for numero, page in enumerate(pdf, start=1):
                     pixmap = page.get_pixmap(matrix=matrice)
                     db.session.add(MenuDocumentPage(
