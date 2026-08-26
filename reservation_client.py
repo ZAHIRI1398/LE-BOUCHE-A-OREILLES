@@ -12,6 +12,7 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 EMAIL_FROM = os.environ.get('EMAIL_FROM', 'contact@leboucheaoreilles.be')
 EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Oreilles'
 EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
+EMAIL_SUBJECT_RECEPTION = 'Réception de votre demande de réservation - Restaurant Le Bouche à Oreilles'
 
 # Pour les tests avec Resend gratuit, rediriger tous les emails vers votre adresse
 TEST_EMAIL_REDIRECT = os.environ.get('TEST_EMAIL_REDIRECT', '')
@@ -92,7 +93,6 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         print("📋 Traceback complet:")
         traceback.print_exc()
         return False
-
 def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi de l'email d'annulation à {email} pour la réservation {reference}")
 
@@ -216,9 +216,9 @@ def creer_reservation():
             # lorsqu'il confirme ou annule chaque date individuellement.
             # envoyer_confirmation_email() gère elle-même le cas où Resend
             # n'est pas configuré (log d'un avertissement, pas d'exception).
-            for reservation in reservations_creees:
+           for reservation in reservations_creees:
                 try:
-                    envoyer_confirmation_email(
+                    envoyer_reception_email(
                         reservation.nom,
                         reservation.email,
                         reservation.date,
@@ -227,9 +227,9 @@ def creer_reservation():
                         reservation.reference
                     )
                 except Exception as email_error:
-                    # Ne pas faire échouer la création de la réservation
-                    # si l'envoi de l'email de confirmation échoue.
-                    print(f"⚠️  Erreur lors de l'envoi de l'email de confirmation au client: {email_error}")
+                    # Ne pas ffor reservation in reservations_creees:aire échouer la création de la réservation
+                    # si l'envoi de l'email de réception échoue.
+                    print(f"⚠️  Erreur lors de l'envoi de l'email de réception au client: {email_error}")
 
             session['derniere_reservation'] = groupe_reference
 
