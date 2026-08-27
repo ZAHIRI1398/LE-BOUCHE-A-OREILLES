@@ -143,5 +143,11 @@
 <!-- Signature établissement -->
 <div class="text-center py-4 footer-logo-band band-white">
     <img src="{{ url_for('static', filename='images/logo-footer-sainte-bernadette.png') }}" alt="Établissement Sainte-Bernadette">
+    <p class="mt-3 mb-0">
+        <a href="{{ url_for('static', filename='politique-vie-privee.pdf') }}" target="_blank"
+           style="color: #6c757d; font-size: .9rem; text-decoration: none;">
+            <i class="fas fa-shield-alt me-1"></i> Politique de vie privée
+        </a>
+    </p>
 </div>
 {% endblock %}
