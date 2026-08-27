@@ -135,6 +135,54 @@ def afficher_toutes_reservations():
         return redirect(url_for('accueil'))
 
 
+@app.route('/admin/reservations/par-date')
+@login_required
+def reservations_par_date():
+    try:
+        inspector = db.inspect(db.engine)
+        if 'reservations' not in inspector.get_table_names():
+            flash("La base de données n'est pas initialisée correctement.", "error")
+            return redirect(url_for('accueil'))
+
+        # On ne compte que les réservations non annulées pour le nombre de tables
+        reservations = Reservation.query.filter(
+            Reservation.statut != 'annulee'
+        ).order_by(Reservation.date.asc(), Reservation.heure.asc()).all()
+
+        # Grouper par date
+        par_date = {}
+        for r in reservations:
+            par_date.setdefault(r.date, []).append(r)
+
+        # Construire un résumé trié par date croissante
+        resume = []
+        for date_str in sorted(par_date.keys()):
+            liste = par_date[date_str]
+            nb_tables = len(liste)
+            nb_personnes = sum(r.personnes for r in liste)
+            # Statut breakdown
+            confirmees = sum(1 for r in liste if r.statut == 'confirmee')
+            en_attente = sum(1 for r in liste if r.statut == 'en_attente')
+            resume.append({
+                'date': date_str,
+                'nb_tables': nb_tables,
+                'nb_personnes': nb_personnes,
+                'confirmees': confirmees,
+                'en_attente': en_attente,
+                'reservations': liste,
+            })
+
+        return render_template('admin_reservations_par_date.html',
+                             resume=resume,
+                             now=datetime.now())
+    except Exception as e:
+        app.logger.error(f"Erreur lors du regroupement par date: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        flash(f"Une erreur est survenue : {str(e)}", "error")
+        return redirect(url_for('accueil'))
+
+
 
 # Créer les tables au démarrage
 with app.app_context():
