@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Gestion du Menu - Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .pdf-preview-container {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .pdf-pages {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .pdf-page {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .pdf-page:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .pdf-page img {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+    
+    .pdf-page-number {
+        background-color: #f8f9fa;
+        padding: 8px 12px;
+        text-align: center;
+        font-size: 0.875rem;
+        color: #6c757d;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .pdf-controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 15px;
+    }
+    
+    .pdf-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .menu-grid {
+        display: grid;
+        gap: 20px;
+    }
+    
+    .card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+    }
+    
+    .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        padding: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Gestion du Menu</h1>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('importer_menu') }}" class="btn btn-outline-primary">
+                <i class="fas fa-file-import me-1"></i> Importer un menu
+            </a>
+            <a href="{{ url_for('export_menu_pdf') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-file-export me-1"></i> Exporter en PDF
+            </a>
+            <a href="{{ url_for('ajouter_plat') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i> Ajouter un plat
+            </a>
+        </div>
+    </div>
+
+    <!-- Section Menu PDF -->
+    {% if menu_pdf %}
+    <div class="pdf-preview-container">
+        <div class="pdf-header">
+            <div>
+                <h2 class="h5 mb-2">Menu PDF affiché sur le site</h2>
+                <p class="text-muted mb-0">
+                    <i class="fas fa-file-pdf me-2 text-danger"></i>
+                    <strong>{{ menu_pdf.nom_fichier }}</strong>
+                    <br>
+                    <small>Mis en ligne le {{ menu_pdf.date_upload.strftime('%d/%m/%Y à %H:%M') }}</small>
+                </p>
+            </div>
+            <div class="pdf-controls">
+                <a href="{{ url_for('menu_pdf') }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-eye me-1"></i> Ouvrir en PDF
+                </a>
+                <a href="{{ url_for('importer_menu') }}" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-file-import me-1"></i> Remplacer
+                </a>
+                <form action="{{ url_for('supprimer_menu_pdf') }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-outline-danger btn-sm"
+                            onclick="return confirm('Retirer le menu PDF du site ?')">
+                        <i class="fas fa-trash me-1"></i> Retirer
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Aperçu des pages PDF -->
+        {% if menu_pdf.pages %}
+        <div class="pdf-pages">
+            {% for page in menu_pdf.pages %}
+            <div class="pdf-page">
+                <img src="{{ url_for('menu_pdf_page', page_id=page.id) }}" 
+                     alt="Menu, page {{ page.numero }}"
+                     class="img-fluid"
+                     loading="lazy">
+                <div class="pdf-page-number">Page {{ page.numero }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-4">En cours de traitement des pages PDF...</p>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-light">
+            <h2 class="h5 mb-0">Menu PDF</h2>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+                Aucun menu PDF n'est actuellement en ligne.
+            </p>
+            <a href="{{ url_for('importer_menu') }}" class="btn btn-primary">
+                <i class="fas fa-file-import me-1"></i> Mettre en ligne un PDF
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Section Plats par catégorie -->
+    <h2 class="h4 mb-4 mt-5">Gestion des plats</h2>
+    <div class="menu-grid">
+        {% for categorie, plats in menu_par_categorie.items() %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="h5 mb-0">{{ categorie }}</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%"></th>
+                                <th>Nom</th>
+                                <th>Description</th>
+                                <th class="text-end" style="width: 12%">Prix</th>
+                                <th class="text-end" style="width: 12%">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for plat in plats %}
+                            <tr>
+                                <td class="align-middle text-center">
+                                    <img src="{{ url_for('static', filename='images/plat' ~ (loop.index0 % 4) ~ '.jpg') }}" 
+                                         alt="{{ plat.nom }}" 
+                                         class="rounded"
+                                         style="width: 45px; height: 45px; object-fit: cover;"
+                                         onerror="this.onerror=null; this.src='{{ url_for('static', filename='images/logo1.jpg') }}';
+                                         this.style.width='45px'; this.style.height='45px';">
+                                </td>
+                                <td class="align-middle">
+                                    <strong>{{ plat.nom }}</strong>
+                                </td>
+                                <td class="align-middle">
+                                    <small>{{ plat.description }}</small>
+                                </td>
+                                <td class="align-middle text-end">
+                                    <strong>{{ "%.2f"|format(plat.prix) }} €</strong>
+                                </td>
+                                <td class="align-middle text-end">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{{ url_for('modifier_plat', plat_id=plat.id) }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form action="{{ url_for('supprimer_plat', plat_id=plat.id) }}" method="POST" class="d-inline">
+                                            <button type="submit" class="btn btn-outline-danger" 
+                                                    onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce plat ?')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not menu_par_categorie %}
+        <div class="card border-info">
+            <div class="card-body text-center py-5">
+                <p class="text-muted mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Aucun plat n'a été ajouté pour le moment.
+                </p>
+                <a href="{{ url_for('ajouter_plat') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i> Ajouter un plat
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    // Amélioration : Rechargement automatique des images si elles ne charge pas
+    document.addEventListener('DOMContentLoaded', function() {
+        const images = document.querySelectorAll('.pdf-page img');
+        images.forEach(img => {
+            img.addEventListener('error', function() {
+                console.log('Erreur de chargement pour l\'image:', img.src);
+            });
+        });
+    });
+</script>
+{% endblock %}
+

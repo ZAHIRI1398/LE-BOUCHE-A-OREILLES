@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mes réservations</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .reservations-list {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .reservation-item {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .reservation-item:last-child {
+            border-bottom: none;
+        }
+        .reservation-info h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .reservation-meta {
+            display: flex;
+            gap: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+        .reservation-status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status-confirmed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-cancelled {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .no-reservations {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn-cancel {
+            background-color: #dc3545;
+        }
+        .btn-cancel:hover {
+            background-color: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mes réservations</h1>
+        
+        {% if reservations %}
+            <div class="reservations-list">
+                {% for resa in reservations %}
+                <div class="reservation-item">
+                    <div class="reservation-info">
+                        <h3>Réservation #{{ resa['id'] }}</h3>
+                        <div class="reservation-meta">
+                            <span>Le {{ resa['date'] }} à {{ resa['heure'] }}</span>
+                            <span>{{ resa['personnes'] }} personne{% if resa['personnes'] > 1 %}s{% endif %}</span>
+                            <span class="reservation-status status-{{ resa['statut'] }}">
+                                {{ 'En attente' if resa['statut'] == 'en_attente' else 'Confirmée' if resa['statut'] == 'confirmee' else 'Annulée' }}
+                            </span>
+                        </div>
+                        {% if resa['message'] %}
+                        <p class="reservation-notes">
+                            <strong>Notes :</strong> {{ resa['message'] }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% if resa['statut'] == 'en_attente' %}
+                    <div class="actions">
+                        <a href="#" class="btn btn-cancel" onclick="return confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')">
+                            Annuler
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="no-reservations">
+                <p>Vous n'avez aucune réservation pour le moment.</p>
+                <a href="{{ url_for('reservation.reserver') }}" class="btn">Faire une réservation</a>
+            </div>
+        {% endif %}
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{{ url_for('reservation.reserver') }}" class="btn">Nouvelle réservation</a>
+            <a href="{{ url_for('accueil') }}" style="margin-left: 10px;">Retour à l'accueil</a>
+        </div>
+    </div>
+    
+    <script>
+        // Fonction pour confirmer l'annulation d'une réservation
+        function confirmerAnnulation(event) {
+            if (!confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) {
+                event.preventDefault();
+                return false;
+            }
+            // Ici, vous pourriez ajouter un appel AJAX pour annuler la réservation
+            return true;
+        }
+        
+        // Ajouter les gestionnaires d'événements aux boutons d'annulation
+        document.addEventListener('DOMContentLoaded', function() {
+            const cancelButtons = document.querySelectorAll('.btn-cancel');
+            cancelButtons.forEach(button => {
+                button.addEventListener('click', confirmerAnnulation);
+            });
+        });
+    </script>
+</body>
+</html>

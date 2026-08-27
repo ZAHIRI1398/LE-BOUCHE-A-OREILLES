@@ -1,0 +1,67 @@
+<!-- templates/admin_reservations.html -->
+{% extends "base.html" %}
+{% block title %}Gestion des Réservations - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Gestion des Réservations</h1>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Liste des réservations</h5>
+                <a href="{{ url_for('afficher_reservations') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-sync-alt me-1"></i> Actualiser
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nom</th>
+                            <th>Date</th>
+                            <th>Heure</th>
+                            <th>Personnes</th>
+                            <th>Statut</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reservation in reservations %}
+                        <tr>
+                            <td>{{ reservation.id }}</td>
+                            <td>{{ reservation.nom }}</td>
+                            <td>{{ reservation.date }}</td>
+                            <td>{{ reservation.heure }}</td>
+                            <td>{{ reservation.personnes }}</td>
+                            <td>
+                                {% if reservation.statut == 'confirmée' %}
+                                    <span class="badge bg-success">Confirmée</span>
+                                {% else %}
+                                    <span class="badge bg-warning">En attente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form action="{{ url_for('changer_statut', id=reservation.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success me-1" title="Confirmer">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('supprimer_reservation', id=reservation.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette réservation ?');">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Supprimer">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

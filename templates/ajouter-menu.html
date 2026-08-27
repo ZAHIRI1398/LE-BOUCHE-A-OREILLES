@@ -1,0 +1,52 @@
+<!-- templates/ajouter-menu.html -->
+{% extends "base.html" %}
+{% block title %}Ajouter un Plat - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Ajouter un nouveau plat</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_ajouter_plat_action') }}">
+                        <div class="mb-3">
+                            <label for="nom_plat" class="form-label">Nom du plat</label>
+                            <input type="text" class="form-control" id="nom_plat" name="nom_plat" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="prix" class="form-label">Prix (€)</label>
+                                <input type="number" step="0.01" class="form-control" id="prix" name="prix" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="categorie" class="form-label">Catégorie</label>
+                                <select class="form-select" id="categorie" name="categorie" required>
+                                    <option value="Entrées">Entrée</option>
+                                    <option value="Plats principaux" selected>Plat principal</option>
+                                    <option value="Desserts">Dessert</option>
+                                    <option value="Boissons">Boisson</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('menu') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i> Retour au menu
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Enregistrer le plat
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

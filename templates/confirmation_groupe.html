@@ -1,0 +1,70 @@
+<!-- templates/confirmation_groupe.html -->
+{% extends "base.html" %}
+{% block title %}Confirmation de Réservation - BOUCHE A OREILLE{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow text-center">
+                <div class="card-body p-5">
+                    <div class="mb-4">
+                        <div class="icon-success mb-3">
+                            <i class="fas fa-hourglass-half fa-5x text-warning"></i>
+                        </div>
+                        <h1 class="h3 mb-3">Réservation en attente de confirmation</h1>
+                        <p class="lead">
+                            Merci, {{ premiere.nom }} ! Votre demande a bien été enregistrée pour
+                            {{ reservations|length }} date{{ 's' if reservations|length > 1 else '' }}.
+                            Notre équipe va l'examiner et vous recevrez un email dès que chaque date sera confirmée.
+                        </p>
+                    </div>
+
+                    <div class="card border-0 bg-light mb-4">
+                        <div class="card-body">
+                            <h2 class="h5 mb-4">Détails de votre réservation</h2>
+                            <div class="row text-start mb-3">
+                                <div class="col-md-6 mb-3">
+                                    <p class="mb-1"><strong>Heure :</strong></p>
+                                    <p class="text-muted">{{ premiere.heure }}</p>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <p class="mb-1"><strong>Nombre de personnes :</strong></p>
+                                    <p class="text-muted">{{ premiere.personnes }}</p>
+                                </div>
+                            </div>
+                            <p class="mb-2 text-start"><strong>Dates réservées :</strong></p>
+                            <ul class="list-group text-start">
+                                {% for reservation in reservations %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{{ reservation.date_formatted }}</span>
+                                    <span class="text-muted small">{{ reservation.reference }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <h3 class="h5 mb-3">Informations importantes</h3>
+                        <ul class="text-start">
+                            <li>Votre réservation n'est pas encore définitive : chaque date doit être validée par notre équipe</li>
+                            <li>Vous recevrez un email par date confirmée (ou, le cas échéant, annulée)</li>
+                            <li>Pour toute question, contactez-nous au 0471/24.32.79</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-4">
+                        <a href="{{ url_for('accueil') }}" class="btn btn-primary me-2">
+                            <i class="fas fa-home me-2"></i>Retour à l'accueil
+                        </a>
+                        <a href="#" class="btn btn-outline-secondary">
+                            <i class="fas fa-print me-2"></i>Imprimer
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
