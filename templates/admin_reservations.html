@@ -152,10 +152,10 @@
                     </button>
                     <span class="me-2">Filtrer :</span>
                     <div class="btn-group" role="group">
-                        <a href="{{ url_for('afficher_toutes_reservations') }}" class="btn btn-outline-secondary">Toutes</a>
-                        <a href="{{ url_for('afficher_toutes_reservations', statut='en_attente') }}" class="btn btn-outline-warning">En attente</a>
-                        <a href="{{ url_for('afficher_toutes_reservations', statut='confirmee') }}" class="btn btn-outline-success">Confirmées</a>
-                        <a href="{{ url_for('afficher_toutes_reservations', statut='annulee') }}" class="btn btn-outline-danger">Annulées</a>
+                        <a href="{{ url_for('afficher_toutes_reservations') }}" class="btn {% if statut_actuel %}btn-outline-secondary{% else %}btn-secondary{% endif %}">Toutes</a>
+                        <a href="{{ url_for('afficher_toutes_reservations', statut='en_attente') }}" class="btn {% if statut_actuel == 'en_attente' %}btn-warning{% else %}btn-outline-warning{% endif %}">En attente</a>
+                        <a href="{{ url_for('afficher_toutes_reservations', statut='confirmee') }}" class="btn {% if statut_actuel == 'confirmee' %}btn-success{% else %}btn-outline-success{% endif %}">Confirmées</a>
+                        <a href="{{ url_for('afficher_toutes_reservations', statut='annulee') }}" class="btn {% if statut_actuel == 'annulee' %}btn-danger{% else %}btn-outline-danger{% endif %}">Annulées</a>
                     </div>
                 </div>
             </div>

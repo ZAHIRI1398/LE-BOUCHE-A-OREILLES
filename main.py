@@ -121,13 +121,19 @@ def afficher_toutes_reservations():
             app.logger.error("La table 'reservations' n'existe pas dans la base de données")
             flash("La base de données n'est pas initialisée correctement. Veuillez contacter l'administrateur.", "error")
             return redirect(url_for('accueil'))
-        
-        reservations = Reservation.query.order_by(Reservation.date.desc(), Reservation.heure.desc()).all()
-        
+
+        # Filtrage par statut (paramètre ?statut=en_attente|confirmee|annulee)
+        statut = request.args.get('statut')
+        query = Reservation.query
+        if statut in ('en_attente', 'confirmee', 'annulee'):
+            query = query.filter(Reservation.statut == statut)
+        reservations = query.order_by(Reservation.date.desc(), Reservation.heure.desc()).all()
+
         # Ajouter la date et l'heure actuelles pour l'impression
-        return render_template('admin_reservations.html', 
+        return render_template('admin_reservations.html',
                              reservations=reservations,
                              email=None,
+                             statut_actuel=statut,
                              now=datetime.now())
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
