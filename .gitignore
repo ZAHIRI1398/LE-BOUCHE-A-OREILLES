@@ -1,1 +1,4 @@
-"data/reservations.db" 
+"data/reservations.db"
+data/*.db
+__pycache__/
+*.pyc
