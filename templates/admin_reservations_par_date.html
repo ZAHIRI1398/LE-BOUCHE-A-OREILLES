@@ -18,7 +18,22 @@
         .stat-badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: .9rem; }
         .table th { white-space: nowrap; }
         .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
-        @media print { .no-print { display: none !important; } }
+        @media print {
+            .no-print, .btn, nav, form { display: none !important; }
+            body { padding: 0; font-size: 14px; background: white; }
+            .admin-container { max-width: 100%; box-shadow: none; padding: 0; margin: 0; }
+            .container { max-width: 100%; padding: 0; }
+            .date-card { page-break-inside: avoid; margin-bottom: 15px; }
+            .date-header { background: #cf7a3e !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .stat-badge { background: rgba(255,255,255,0.2) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .table { width: 100%; font-size: 14px; }
+            .table th, .table td { padding: 0.5rem; }
+            .bg-success { background-color: #28a745 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-warning { background-color: #ffc107 !important; color: #212529 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-danger { background-color: #dc3545 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .text-muted { color: #666 !important; }
+            @page { size: A4 landscape; margin: 1cm; }
+        }
     </style>
 </head>
 <body>
