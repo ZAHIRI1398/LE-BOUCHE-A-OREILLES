@@ -77,7 +77,7 @@ def creer_tables():
 
 # Configuration de l'admin
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "password123"  # À changer en production
+ADMIN_PASSWORD = "admin1160"  # À changer en production
 
 # Protection des routes admin
 def login_required(f):
