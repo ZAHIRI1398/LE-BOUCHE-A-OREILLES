@@ -38,6 +38,21 @@
             padding: 2rem 0;
             margin-top: 3rem;
         }
+        /* Message d'erreur grand et visible pour personnes agees */
+        .alert-error-grande {
+            font-size: 1.4rem !important;
+            font-weight: 700 !important;
+            color: #721c24 !important;
+            background-color: #f8d7da !important;
+            border: 3px solid #dc3545 !important;
+            border-radius: 12px !important;
+            padding: 1.5rem !important;
+            line-height: 1.5 !important;
+        }
+        .alert-error-grande .btn-close {
+            font-size: 1.5rem !important;
+            padding: 1rem !important;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -83,7 +98,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show mt-3" role="alert">
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mt-3 {% if category == 'error' %}alert-error-grande{% endif %}" role="alert">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
