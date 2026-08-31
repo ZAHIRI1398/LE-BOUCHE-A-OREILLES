@@ -293,7 +293,7 @@ def creer_reservation():
 
             if dates_completes:
                 if len(dates_completes) == 1:
-                    flash(f"Désolé, cette date ({dates_completes[0]}) est déjà complète. Veuillez choisir une autre date.", 'error')
+                    flash(f"Désolé, cette date ({dates_completes[0]}) est déjà complète. Veuillez choisir une autre date ou nous contacter 0471 24 32 79.", 'error')
                 else:
                     flash(f"Désolé, ces dates sont déjà complètes : {', '.join(dates_completes)}. Veuillez choisir d'autres dates.", 'error')
                 return redirect(url_for('reservation.reserver'))
