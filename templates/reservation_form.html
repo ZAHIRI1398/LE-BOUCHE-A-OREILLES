@@ -37,6 +37,8 @@
     .calendrier-case:hover:not(.indisponible):not(.vide) { background: #f1e7da; }
     .calendrier-case.vide { visibility: hidden; }
     .calendrier-case.indisponible { color: #ced4da; cursor: not-allowed; background: #f8f9fa; }
+    .calendrier-case.complete { color: #fff; cursor: not-allowed; background: #e74c3c; position: relative; }
+    .calendrier-case.complete::after { content: '✕'; position: absolute; font-size: .7rem; }
     .calendrier-case.selectionnee { background: #cf7a3e; color: #fff; font-weight: 700; }
     .dates-choisies {
         display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; min-height: 2.5rem;
@@ -205,6 +207,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let moisAffiche = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), 1);
     const datesSelectionnees = new Set();
 
+    // Occupation des dates : { "2026-09-10": 20, ... }
+    // Les dates ayant atteint le maximum ne sont pas cliquables.
+    let occupationDates = {};
+    let maxPersonnes = 26;
+
     const grilleEl = document.getElementById('calendrier-grille');
     const labelEl = document.getElementById('mois-label');
     const precedentBtn = document.getElementById('mois-precedent');
@@ -284,14 +291,22 @@ document.addEventListener('DOMContentLoaded', function () {
             const iso = versISO(date);
             const estWeekend = date.getDay() === 0 || date.getDay() === 6;
             const estPasse = date < aujourdhui;
+            const totalPersonnes = occupationDates[iso] || 0;
+            const estComplete = totalPersonnes >= maxPersonnes;
 
             const el = document.createElement('div');
             el.textContent = jour;
 
             if (estWeekend || estPasse) {
                 el.className = 'calendrier-case indisponible';
+            } else if (estComplete) {
+                el.className = 'calendrier-case complete';
+                el.title = 'Complet (' + totalPersonnes + '/' + maxPersonnes + ' personnes)';
             } else {
                 el.className = 'calendrier-case' + (datesSelectionnees.has(iso) ? ' selectionnee' : '');
+                if (totalPersonnes > 0) {
+                    el.title = totalPersonnes + '/' + maxPersonnes + ' personnes réservées';
+                }
                 el.addEventListener('click', function () {
                     if (datesSelectionnees.has(iso)) {
                         datesSelectionnees.delete(iso);
@@ -324,6 +339,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     dessinerCalendrier();
     majResume();
+
+    // Charger l'occupation des dates depuis l'API, puis redessiner
+    // le calendrier pour desactiver les dates completes.
+    fetch('{{ url_for("reservation.api_occupation_dates") }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data.occupation) {
+                occupationDates = data.occupation;
+                maxPersonnes = data.max_personnes || 26;
+                dessinerCalendrier();
+            }
+        })
+        .catch(err => console.warn('Impossible de charger l\'occupation des dates:', err));
 });
 </script>
 {% endblock %}

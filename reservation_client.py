@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
 from flask_login import login_required
 import resend
 from datetime import datetime
 import os
+from sqlalchemy import func
 
 # Création d'un Blueprint pour les routes de réservation
 reservation_bp = Blueprint('reservation', __name__)
@@ -20,6 +21,35 @@ TEST_EMAIL_REDIRECT = os.environ.get('TEST_EMAIL_REDIRECT', '')
 @reservation_bp.route('/reserver')
 def reserver():
     return render_template('reservation_form.html')
+
+# Nombre maximum de personnes par date. Au-dela, la date
+# est consideree comme complete et n'est plus reservable.
+MAX_PERSONNES_PAR_DATE = 26
+
+@reservation_bp.route('/api/occupation-dates')
+def api_occupation_dates():
+    """Retourne le nombre de personnes par date (reservations non annulees)."""
+    try:
+        from models import db, Reservation
+        # On compte les personnes des reservations en_attente et confirmees
+        # (les annulees ne comptent plus).
+        resultats = db.session.query(
+            Reservation.date,
+            func.sum(Reservation.personnes).label('total')
+        ).filter(
+            Reservation.statut.in_(['en_attente', 'confirmee'])
+        ).group_by(Reservation.date).all()
+
+        occupation = {}
+        for date, total in resultats:
+            occupation[date] = int(total or 0)
+
+        return jsonify({
+            'occupation': occupation,
+            'max_personnes': MAX_PERSONNES_PAR_DATE
+        })
+    except Exception as e:
+        return jsonify({'erreur': str(e)}), 500
 
 def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi d'email à {email} pour la réservation {reference}")
@@ -248,6 +278,25 @@ def creer_reservation():
         try:
             # Importer depuis models pour éviter l'importation circulaire
             from models import db, Reservation
+            from sqlalchemy import func
+
+            # Verifier qu'aucune date selectionnee n'est deja complete.
+            # On compte les personnes des reservations non annulees.
+            dates_completes = []
+            for date in dates:
+                total = db.session.query(func.sum(Reservation.personnes)).filter(
+                    Reservation.date == date,
+                    Reservation.statut.in_(['en_attente', 'confirmee'])
+                ).scalar() or 0
+                if total + personnes > MAX_PERSONNES_PAR_DATE:
+                    dates_completes.append(date)
+
+            if dates_completes:
+                if len(dates_completes) == 1:
+                    flash(f"Désolé, cette date ({dates_completes[0]}) est déjà complète. Veuillez choisir une autre date.", 'error')
+                else:
+                    flash(f"Désolé, ces dates sont déjà complètes : {', '.join(dates_completes)}. Veuillez choisir d'autres dates.", 'error')
+                return redirect(url_for('reservation.reserver'))
 
             # Reference sequentielle par date : Table1, Table2, etc.
             # Le compteur se reinitialise pour chaque date.
