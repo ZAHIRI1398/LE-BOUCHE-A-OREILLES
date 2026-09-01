@@ -306,8 +306,28 @@ def creer_reservation():
             reservations_creees = []
 
             for date in dates:
-                count_date = Reservation.query.filter_by(date=date).count()
-                reference = f'Table{count_date + 1}-{date}'
+                # Trouver le numero de table le plus eleve pour cette date
+                # pour eviter les collisions (en cas de suppression ou de
+                # reservations simultanees).
+                import re
+                tables_existantes = Reservation.query.filter_by(date=date).all()
+                numeros = []
+                for r in tables_existantes:
+                    match = re.match(r'Table(\d+)-', r.reference)
+                    if match:
+                        numeros.append(int(match.group(1)))
+                prochain_num = (max(numeros) + 1) if numeros else 1
+
+                # Generer une reference unique. Si elle existe deja (cas
+                # rare de concurrence), on incremente jusqu'a en trouver une
+                # de libre.
+                while True:
+                    reference = f'Table{prochain_num}-{date}'
+                    existe = Reservation.query.filter_by(reference=reference).first()
+                    if not existe:
+                        break
+                    prochain_num += 1
+
                 nouvelle_reservation = Reservation(
                     reference=reference,
                     groupe_reference=groupe_reference,
