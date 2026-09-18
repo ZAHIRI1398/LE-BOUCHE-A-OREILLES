@@ -527,6 +527,28 @@ def supprimer_reservation(id):
     
     return redirect(url_for('afficher_toutes_reservations'))
 
+@app.route('/admin/reservations/supprimer_multiple', methods=['POST'])
+@login_required
+def supprimer_reservations_multiple():
+    ids = request.form.getlist('ids[]')
+    if not ids:
+        flash('Aucune réservation sélectionnée.', 'warning')
+        return redirect(url_for('afficher_toutes_reservations'))
+    try:
+        count = 0
+        for rid in ids:
+            reservation = Reservation.query.get(int(rid))
+            if reservation:
+                db.session.delete(reservation)
+                count += 1
+        db.session.commit()
+        flash(f'{count} réservation(s) supprimée(s) avec succès.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erreur lors de la suppression multiple : {str(e)}', 'error')
+
+    return redirect(url_for('afficher_toutes_reservations'))
+
 def generate_reference(date=None):
     """Generate a sequential reference like Table1-2026-08-28, Table2-2026-08-28, etc.
     If date is provided, the counter resets for each date."""
