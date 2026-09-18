@@ -140,5 +140,113 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_js %}{% endblock %}
+
+    <!-- Cookie Banner -->
+    <div class="cookie-banner" id="cookieBanner" style="display: none;">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-10">
+                    <p class="mb-2 text-white">
+                        <i class="fas fa-cookie-bite me-2"></i>
+                        <strong>Nous utilisons des cookies</strong> pour améliorer votre expérience et assurer la sécurité du site.
+                        En continuant, vous acceptez notre <a href="#" class="text-warning" onclick="showPrivacyModal()">politique de confidentialité</a>.
+                    </p>
+                    <small class="text-white-50">
+                        Cookies utilisés : Session (connexion), Sécurité des formulaires
+                    </small>
+                </div>
+                <div class="col-md-2 text-end">
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button class="btn btn-outline-light btn-sm" onclick="rejectCookies()">Refuser</button>
+                        <button class="btn btn-primary btn-sm" onclick="acceptCookies()">Accepter</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div class="modal fade" id="privacyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-shield-alt me-2"></i>Politique de Confidentialité</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="fw-bold mb-3">📋 Informations générales</h6>
+                    <p class="text-muted">Le restaurant LE BOUCHE À OREILLES s'engage à protéger vos données personnelles et à respecter votre vie privée conformément au RGPD.</p>
+
+                    <h6 class="fw-bold mb-3 mt-4">🍪 Cookies utilisés</h6>
+                    <ul class="text-muted">
+                        <li><strong>Cookie de session</strong> : Nécessaire pour maintenir votre connexion pendant votre visite</li>
+                        <li><strong>Cookie de sécurité</strong> : Protège vos formulaires de réservation contre les attaques</li>
+                    </ul>
+
+                    <h6 class="fw-bold mb-3 mt-4">🔒 Protection des données</h6>
+                    <p class="text-muted">Vos données de réservation sont stockées de manière sécurisée et ne sont jamais partagées avec des tiers sans votre consentement explicite.</p>
+
+                    <h6 class="fw-bold mb-3 mt-4">👤 Vos droits</h6>
+                    <p class="text-muted">Conformément au RGPD, vous avez le droit de :</p>
+                    <ul class="text-muted">
+                        <li>Accéder à vos données personnelles</li>
+                        <li>Rectifier vos données</li>
+                        <li>Supprimer vos données</li>
+                        <li>Vous opposer au traitement de vos données</li>
+                    </ul>
+
+                    <h6 class="fw-bold mb-3 mt-4">📧 Contact</h6>
+                    <p class="text-muted">Pour toute question concernant vos données personnelles : <a href="mailto:stbernadette.restaurant@gmail.com" class="text-primary">stbernadette.restaurant@gmail.com</a></p>
+
+                    <div class="alert alert-success mt-4 mb-0">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Dernière mise à jour : Septembre 2026
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .cookie-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.2);
+            z-index: 10000;
+        }
+    </style>
+
+    <script>
+        // Gestion des cookies
+        function checkCookieConsent() {
+            const consent = localStorage.getItem('cookieConsent');
+            if (!consent) {
+                document.getElementById('cookieBanner').style.display = 'block';
+            }
+        }
+
+        function acceptCookies() {
+            localStorage.setItem('cookieConsent', 'accepted');
+            document.getElementById('cookieBanner').style.display = 'none';
+        }
+
+        function rejectCookies() {
+            localStorage.setItem('cookieConsent', 'rejected');
+            document.getElementById('cookieBanner').style.display = 'none';
+        }
+
+        function showPrivacyModal() {
+            const modal = new bootstrap.Modal(document.getElementById('privacyModal'));
+            modal.show();
+        }
+
+        // Vérifier le consentement cookies au chargement
+        window.addEventListener('load', checkCookieConsent);
+    </script>
 </body>
 </html>
