@@ -25,6 +25,16 @@ def reserver():
 # Nombre maximum de personnes par date. Au-dela, la date
 # est consideree comme complete et n'est plus reservable.
 MAX_PERSONNES_PAR_DATE = 26
+# Exception : le mardi, le maximum est de 30 personnes.
+MAX_PERSONNES_MARDI = 30
+
+def max_personnes_pour_date(date_str):
+    """Retourne le maximum de personnes autorise pour une date (30 le mardi, 26 sinon)."""
+    try:
+        jour_semaine = datetime.strptime(date_str, '%Y-%m-%d').weekday()
+    except ValueError:
+        return MAX_PERSONNES_PAR_DATE
+    return MAX_PERSONNES_MARDI if jour_semaine == 1 else MAX_PERSONNES_PAR_DATE
 
 @reservation_bp.route('/api/occupation-dates')
 def api_occupation_dates():
@@ -46,7 +56,8 @@ def api_occupation_dates():
 
         return jsonify({
             'occupation': occupation,
-            'max_personnes': MAX_PERSONNES_PAR_DATE
+            'max_personnes': MAX_PERSONNES_PAR_DATE,
+            'max_personnes_mardi': MAX_PERSONNES_MARDI
         })
     except Exception as e:
         return jsonify({'erreur': str(e)}), 500
@@ -288,7 +299,7 @@ def creer_reservation():
                     Reservation.date == date,
                     Reservation.statut.in_(['en_attente', 'confirmee'])
                 ).scalar() or 0
-                if total + personnes > MAX_PERSONNES_PAR_DATE:
+                if total + personnes > max_personnes_pour_date(date):
                     dates_completes.append(date)
 
             if dates_completes:
