@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
 from flask_login import login_required
 import resend
-from datetime import datetime
+from datetime import datetime, date
 import os
 from sqlalchemy import func
 
@@ -28,12 +28,25 @@ MAX_PERSONNES_PAR_DATE = 26
 # Exception : le mardi, le maximum est de 30 personnes.
 MAX_PERSONNES_MARDI = 30
 
+# A partir du 1er novembre 2026 : 30 personnes du lundi au jeudi,
+# 32 le vendredi. (Le weekend n'est pas reservable dans le calendrier.)
+NOV_DEBUT = date(2026, 11, 1)
+MAX_PERSONNES_SEMAINE_NOV = 30
+MAX_PERSONNES_VENDREDI_NOV = 32
+
 def max_personnes_pour_date(date_str):
-    """Retourne le maximum de personnes autorise pour une date (30 le mardi, 26 sinon)."""
+    """Retourne le maximum de personnes autorise pour une date.
+
+    Avant le 1er novembre 2026 : 26 personnes, 30 le mardi.
+    A partir du 1er novembre 2026 : 30 du lundi au jeudi, 32 le vendredi.
+    """
     try:
-        jour_semaine = datetime.strptime(date_str, '%Y-%m-%d').weekday()
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
     except ValueError:
         return MAX_PERSONNES_PAR_DATE
+    jour_semaine = date_obj.weekday()  # lundi=0 ... vendredi=4 ... dimanche=6
+    if date_obj >= NOV_DEBUT:
+        return MAX_PERSONNES_VENDREDI_NOV if jour_semaine == 4 else MAX_PERSONNES_SEMAINE_NOV
     return MAX_PERSONNES_MARDI if jour_semaine == 1 else MAX_PERSONNES_PAR_DATE
 
 @reservation_bp.route('/api/occupation-dates')
@@ -57,7 +70,10 @@ def api_occupation_dates():
         return jsonify({
             'occupation': occupation,
             'max_personnes': MAX_PERSONNES_PAR_DATE,
-            'max_personnes_mardi': MAX_PERSONNES_MARDI
+            'max_personnes_mardi': MAX_PERSONNES_MARDI,
+            'nov_debut': NOV_DEBUT.isoformat(),
+            'nov_semaine': MAX_PERSONNES_SEMAINE_NOV,
+            'nov_vendredi': MAX_PERSONNES_VENDREDI_NOV
         })
     except Exception as e:
         return jsonify({'erreur': str(e)}), 500

@@ -212,6 +212,18 @@ document.addEventListener('DOMContentLoaded', function () {
     let occupationDates = {};
     let maxPersonnes = 26;
     let maxPersonnesMardi = 30;
+    // Nouvelles capacites a partir de novembre 2026
+    let novDebut = '2026-11-01';
+    let novSemaine = 30;
+    let novVendredi = 32;
+
+    // jourSemaine : 0=dimanche, 1=lundi, ..., 5=vendredi
+    function maxPourLaDate(iso, jourSemaine) {
+        if (iso >= novDebut) {
+            return jourSemaine === 5 ? novVendredi : novSemaine;
+        }
+        return jourSemaine === 2 ? maxPersonnesMardi : maxPersonnes;
+    }
 
     const grilleEl = document.getElementById('calendrier-grille');
     const labelEl = document.getElementById('mois-label');
@@ -293,8 +305,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const estWeekend = date.getDay() === 0 || date.getDay() === 6;
             const estPasse = date < aujourdhui;
             const totalPersonnes = occupationDates[iso] || 0;
-            // Mardi (getDay() === 2) : capacite de 30 personnes, 26 sinon.
-            const maxPourDate = (date.getDay() === 2) ? maxPersonnesMardi : maxPersonnes;
+            const maxPourDate = maxPourLaDate(iso, date.getDay());
             const estComplete = totalPersonnes >= maxPourDate;
 
             const el = document.createElement('div');
@@ -352,6 +363,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 occupationDates = data.occupation;
                 maxPersonnes = data.max_personnes || 26;
                 maxPersonnesMardi = data.max_personnes_mardi || 30;
+                novDebut = data.nov_debut || '2026-11-01';
+                novSemaine = data.nov_semaine || 30;
+                novVendredi = data.nov_vendredi || 32;
                 dessinerCalendrier();
             }
         })
