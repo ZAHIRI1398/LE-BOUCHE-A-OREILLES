@@ -325,10 +325,15 @@ def creer_reservation():
                     flash(f"Désolé, ces dates sont déjà complètes : {', '.join(dates_completes)}. Veuillez choisir d'autres dates.", 'error')
                 return redirect(url_for('reservation.reserver'))
 
-            # Reference sequentielle par date : Table1, Table2, etc.
-            # Le compteur se reinitialise pour chaque date.
-            groupe_count = Reservation.query.count()
-            groupe_reference = f'Groupe{groupe_count + 1}'
+            # Reference de groupe unique et non devinable. Un compteur
+            # base sur count() etait reutilise apres une suppression ou
+            # en cas de reservations simultanees : la page de confirmation
+            # melangeait alors les reservations de deux clients.
+            import secrets
+            while True:
+                groupe_reference = f'Groupe-{secrets.token_hex(4)}'
+                if not Reservation.query.filter_by(groupe_reference=groupe_reference).first():
+                    break
 
             reservations_creees = []
 
