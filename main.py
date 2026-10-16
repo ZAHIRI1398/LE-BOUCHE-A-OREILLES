@@ -12,6 +12,7 @@ from reportlab.lib.units import inch
 from io import BytesIO
 import pymupdf
 import smtplib
+import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask_sqlalchemy import SQLAlchemy
@@ -298,22 +299,17 @@ def changer_statut(id):
         db.session.commit()
 
         # Envoyer l'email au client uniquement après la décision de l'admin,
-        # et seulement lorsque le statut change réellement.
+        # et seulement lorsque le statut change réellement. L'envoi se fait
+        # dans un thread pour ne pas bloquer la réponse si le service email
+        # est lent ou injoignable ; on copie les données car les objets
+        # SQLAlchemy expirent après commit dans un autre thread.
         if nouveau_statut != ancien_statut:
-            try:
-                if nouveau_statut == 'confirmee':
-                    envoyer_confirmation_email(
-                        reservation.nom, reservation.email, reservation.date,
-                        reservation.heure, reservation.personnes, reservation.reference
-                    )
-                elif nouveau_statut == 'annulee':
-                    envoyer_annulation_email(
-                        reservation.nom, reservation.email, reservation.date,
-                        reservation.heure, reservation.personnes, reservation.reference
-                    )
-            except Exception as email_error:
-                # Ne pas échouer la mise à jour du statut si l'email ne part pas
-                app.logger.error(f"Erreur lors de l'envoi de l'email: {email_error}")
+            donnees = (reservation.nom, reservation.email, reservation.date,
+                       reservation.heure, reservation.personnes, reservation.reference)
+            if nouveau_statut == 'confirmee':
+                threading.Thread(target=envoyer_confirmation_email, args=donnees, daemon=True).start()
+            elif nouveau_statut == 'annulee':
+                threading.Thread(target=envoyer_annulation_email, args=donnees, daemon=True).start()
 
         flash(f'Le statut de la réservation a été mis à jour avec succès.', 'success')
     except Exception as e:
@@ -677,21 +673,15 @@ def modifier_reservation(id):
             db.session.commit()
 
             # Notifier le client uniquement lorsque l'admin fait passer
-            # la réservation à "confirmee" ou "annulee".
+            # la réservation à "confirmee" ou "annulee". Envoi dans un
+            # thread pour ne pas bloquer la réponse (même raison que ci-dessus).
             if reservation.statut != ancien_statut:
-                try:
-                    if reservation.statut == 'confirmee':
-                        envoyer_confirmation_email(
-                            reservation.nom, reservation.email, reservation.date,
-                            reservation.heure, reservation.personnes, reservation.reference
-                        )
-                    elif reservation.statut == 'annulee':
-                        envoyer_annulation_email(
-                            reservation.nom, reservation.email, reservation.date,
-                            reservation.heure, reservation.personnes, reservation.reference
-                        )
-                except Exception as email_error:
-                    app.logger.error(f"Erreur lors de l'envoi de l'email: {email_error}")
+                donnees = (reservation.nom, reservation.email, reservation.date,
+                           reservation.heure, reservation.personnes, reservation.reference)
+                if reservation.statut == 'confirmee':
+                    threading.Thread(target=envoyer_confirmation_email, args=donnees, daemon=True).start()
+                elif reservation.statut == 'annulee':
+                    threading.Thread(target=envoyer_annulation_email, args=donnees, daemon=True).start()
 
             flash('La réservation a été mise à jour avec succès.', 'success')
             return redirect(url_for('afficher_toutes_reservations'))

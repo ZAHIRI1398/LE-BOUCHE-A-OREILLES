@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required
 import resend
 import smtplib
+import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, date
@@ -31,19 +32,23 @@ SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 
 def envoyer_email(destinataire, sujet, html):
     """Envoie un email HTML via SMTP si configure, sinon via Resend.
-    Retourne True si l'envoi a ete tente avec succes."""
+    En cas d'echec SMTP (ex: ports bloques par l'hebergeur), on retombe
+    sur Resend si la cle est definie. Retourne True si l'envoi a reussi."""
     if SMTP_USER and SMTP_PASSWORD:
-        msg = MIMEMultipart('alternative')
-        msg['From'] = EMAIL_FROM
-        msg['To'] = destinataire
-        msg['Subject'] = sujet
-        msg.attach(MIMEText(html, 'html'))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as serveur:
-            serveur.starttls()
-            serveur.login(SMTP_USER, SMTP_PASSWORD)
-            serveur.send_message(msg)
-        print(f"✅ Email envoyé via SMTP à {destinataire}")
-        return True
+        try:
+            msg = MIMEMultipart('alternative')
+            msg['From'] = EMAIL_FROM
+            msg['To'] = destinataire
+            msg['Subject'] = sujet
+            msg.attach(MIMEText(html, 'html'))
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as serveur:
+                serveur.starttls()
+                serveur.login(SMTP_USER, SMTP_PASSWORD)
+                serveur.send_message(msg)
+            print(f"✅ Email envoyé via SMTP à {destinataire}")
+            return True
+        except Exception as smtp_error:
+            print(f"⚠️  Échec de l'envoi SMTP ({smtp_error}) - tentative via Resend")
 
     if RESEND_API_KEY:
         resend.api_key = RESEND_API_KEY
@@ -371,26 +376,31 @@ def creer_reservation():
 
             db.session.commit()
 
-            # Envoyer immédiatement un email de confirmation de réception au
-            # client pour chaque date réservée, sans attendre la validation
-            # de l'administrateur. L'admin recevra toujours un email dédié
-            # lorsqu'il confirme ou annule chaque date individuellement.
-            # envoyer_reception_email() gère elle-même le cas où Resend
-            # n'est pas configuré (log d'un avertissement, pas d'exception).
-            for reservation in reservations_creees:
-                try:
-                    envoyer_reception_email(
-                        reservation.nom,
-                        reservation.email,
-                        reservation.date,
-                        reservation.heure,
-                        reservation.personnes,
-                        reservation.reference
-                    )
-                except Exception as email_error:
-                    # Ne pas faire échouer la création de la réservation
-                    # si l'envoi de l'email de réception échoue.
-                    print(f"⚠️  Erreur lors de l'envoi de l'email de réception au client: {email_error}")
+            # Envoyer les emails de reception dans un thread separe : un
+            # service email lent ou injoignable ne doit jamais bloquer la
+            # reponse (gunicorn tue le worker apres son timeout). On copie
+            # les donnees car les objets SQLAlchemy expirent apres commit
+            # et ne sont pas utilisables dans un autre thread.
+            donnees_emails = [{
+                'nom': r.nom,
+                'email': r.email,
+                'date': r.date,
+                'heure': r.heure,
+                'personnes': r.personnes,
+                'reference': r.reference,
+            } for r in reservations_creees]
+
+            def _envoyer_receptions(donnees):
+                for d in donnees:
+                    try:
+                        envoyer_reception_email(
+                            d['nom'], d['email'], d['date'],
+                            d['heure'], d['personnes'], d['reference']
+                        )
+                    except Exception as email_error:
+                        print(f"⚠️  Erreur lors de l'envoi de l'email de réception au client: {email_error}")
+
+            threading.Thread(target=_envoyer_receptions, args=(donnees_emails,), daemon=True).start()
 
             session['derniere_reservation'] = groupe_reference
 
