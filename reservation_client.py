@@ -1,6 +1,9 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
 from flask_login import login_required
 import resend
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from datetime import datetime, date
 import os
 from sqlalchemy import func
@@ -17,6 +20,44 @@ EMAIL_SUBJECT_RECEPTION = 'Réception de votre demande de réservation - Restaur
 
 # Pour les tests avec Resend gratuit, rediriger tous les emails vers votre adresse
 TEST_EMAIL_REDIRECT = os.environ.get('TEST_EMAIL_REDIRECT', '')
+
+# Envoi via le SMTP de l'email de l'ecole (gratuit). Si SMTP_USER et
+# SMTP_PASSWORD sont definis, les emails partent par ce canal ; sinon
+# on retombe sur Resend.
+SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+
+def envoyer_email(destinataire, sujet, html):
+    """Envoie un email HTML via SMTP si configure, sinon via Resend.
+    Retourne True si l'envoi a ete tente avec succes."""
+    if SMTP_USER and SMTP_PASSWORD:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = EMAIL_FROM
+        msg['To'] = destinataire
+        msg['Subject'] = sujet
+        msg.attach(MIMEText(html, 'html'))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as serveur:
+            serveur.starttls()
+            serveur.login(SMTP_USER, SMTP_PASSWORD)
+            serveur.send_message(msg)
+        print(f"✅ Email envoyé via SMTP à {destinataire}")
+        return True
+
+    if RESEND_API_KEY:
+        resend.api_key = RESEND_API_KEY
+        r = resend.Emails.send({
+            "from": EMAIL_FROM,
+            "to": [destinataire],
+            "subject": sujet,
+            "html": html
+        })
+        print(f"✅ Email envoyé via Resend! ID: {r['id']}")
+        return True
+
+    print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY)")
+    return False
 
 @reservation_bp.route('/reserver')
 def reserver():
@@ -81,25 +122,18 @@ def api_occupation_dates():
 def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi d'email à {email} pour la réservation {reference}")
     
-    # Vérifier que la clé API est configurée
-    if not RESEND_API_KEY:
-        print("⚠️  RESEND_API_KEY non configurée - email non envoyé")
-        print("📝 Pour configurer Resend:")
-        print("   1. Allez sur https://resend.com")
-        print("   2. Créez une clé API")
-        print("   3. Ajoutez RESEND_API_KEY dans les variables d'environnement Railway")
+    # Vérifier qu'un service email est configuré
+    if not (SMTP_USER and SMTP_PASSWORD) and not RESEND_API_KEY:
+        print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY) - email non envoyé")
         return False
-    
+
     try:
-        # Initialiser Resend
-        resend.api_key = RESEND_API_KEY
-        
         # Formatage de la date
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         date_formatee = date_obj.strftime('%d/%m/%Y')
-        
+
         print(f"📅 Date formatée: {date_formatee}")
-        
+
         # Corps du message en HTML
         html_content = f"""
         <html>
@@ -128,21 +162,9 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
         </html>
         """
         
-        # Pour les tests Resend gratuit, rediriger vers votre email
+        # Pour les tests, rediriger vers votre email
         recipient_email = TEST_EMAIL_REDIRECT if TEST_EMAIL_REDIRECT else email
-        
-        # Envoyer l'email via Resend
-        params = {
-            "from": EMAIL_FROM,
-            "to": [recipient_email],
-            "subject": EMAIL_SUBJECT,
-            "html": html_content
-        }
-        
-        print(f"📧 Envoi via Resend API...")
-        r = resend.Emails.send(params)
-        print(f"✅ Email envoyé avec succès! ID: {r['id']}")
-        return True
+        return envoyer_email(recipient_email, EMAIL_SUBJECT, html_content)
             
     except Exception as e:
         print(f"❌ Erreur lors de l'envoi de l'email: {str(e)}")
@@ -154,15 +176,12 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
 def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi de l'email d'annulation à {email} pour la réservation {reference}")
 
-    # Vérifier que la clé API est configurée
-    if not RESEND_API_KEY:
-        print("⚠️  RESEND_API_KEY non configurée - email non envoyé")
+    # Vérifier qu'un service email est configuré
+    if not (SMTP_USER and SMTP_PASSWORD) and not RESEND_API_KEY:
+        print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY) - email non envoyé")
         return False
 
     try:
-        # Initialiser Resend
-        resend.api_key = RESEND_API_KEY
-
         # Formatage de la date
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         date_formatee = date_obj.strftime('%d/%m/%Y')
@@ -197,21 +216,9 @@ def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
         </html>
         """
 
-        # Pour les tests Resend gratuit, rediriger vers votre email
+        # Pour les tests, rediriger vers votre email
         recipient_email = TEST_EMAIL_REDIRECT if TEST_EMAIL_REDIRECT else email
-
-        # Envoyer l'email via Resend
-        params = {
-            "from": EMAIL_FROM,
-            "to": [recipient_email],
-            "subject": EMAIL_SUBJECT_ANNULATION,
-            "html": html_content
-        }
-
-        print(f"📧 Envoi via Resend API...")
-        r = resend.Emails.send(params)
-        print(f"✅ Email d'annulation envoyé avec succès! ID: {r['id']}")
-        return True
+        return envoyer_email(recipient_email, EMAIL_SUBJECT_ANNULATION, html_content)
 
     except Exception as e:
         print(f"❌ Erreur lors de l'envoi de l'email d'annulation: {str(e)}")
@@ -226,13 +233,11 @@ def envoyer_reception_email(nom, email, date, heure, personnes, reference):
     annulation) sera envoyée par l'administrateur ultérieurement."""
     print(f"🚀 Début de l'envoi de l'email de réception à {email} pour la réservation {reference}")
 
-    if not RESEND_API_KEY:
-        print("⚠️  RESEND_API_KEY non configurée - email non envoyé")
+    if not (SMTP_USER and SMTP_PASSWORD) and not RESEND_API_KEY:
+        print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY) - email non envoyé")
         return False
 
     try:
-        resend.api_key = RESEND_API_KEY
-
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         date_formatee = date_obj.strftime('%d/%m/%Y')
 
@@ -264,18 +269,7 @@ def envoyer_reception_email(nom, email, date, heure, personnes, reference):
         """
 
         recipient_email = TEST_EMAIL_REDIRECT if TEST_EMAIL_REDIRECT else email
-
-        params = {
-            "from": EMAIL_FROM,
-            "to": [recipient_email],
-            "subject": EMAIL_SUBJECT_RECEPTION,
-            "html": html_content
-        }
-
-        print(f"📧 Envoi via Resend API...")
-        r = resend.Emails.send(params)
-        print(f"✅ Email de réception envoyé avec succès! ID: {r['id']}")
-        return True
+        return envoyer_email(recipient_email, EMAIL_SUBJECT_RECEPTION, html_content)
 
     except Exception as e:
         print(f"❌ Erreur lors de l'envoi de l'email de réception: {str(e)}")
