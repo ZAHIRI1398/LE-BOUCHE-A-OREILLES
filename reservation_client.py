@@ -3,6 +3,8 @@ from flask_login import login_required
 import resend
 import smtplib
 import threading
+import json
+import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, date
@@ -34,6 +36,34 @@ SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 # domaine verifie (ex: contact@leboucheaoreilles.be).
 SMTP_FROM = os.environ.get('SMTP_FROM', '')
 
+# Envoi via l'API HTTPS de Brevo (300 emails/jour gratuits). Fonctionne
+# la ou le SMTP est bloque (ex: Railway Hobby bloque les ports SMTP).
+# L'expediteur doit etre un expéditeur/domaine valide dans Brevo.
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
+BREVO_FROM = os.environ.get('BREVO_FROM', '')
+BREVO_FROM_NAME = os.environ.get('BREVO_FROM_NAME', 'Restaurant Le Bouche à Oreilles')
+
+def _envoyer_brevo(destinataire, sujet, html):
+    payload = {
+        'sender': {'email': BREVO_FROM or EMAIL_FROM, 'name': BREVO_FROM_NAME},
+        'to': [{'email': destinataire}],
+        'subject': sujet,
+        'htmlContent': html,
+    }
+    requete = urllib.request.Request(
+        'https://api.brevo.com/v3/smtp/email',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'api-key': BREVO_API_KEY,
+            'Content-Type': 'application/json',
+            'accept': 'application/json',
+        },
+        method='POST',
+    )
+    with urllib.request.urlopen(requete, timeout=15) as reponse:
+        print(f"✅ Email envoyé via Brevo à {destinataire} (HTTP {reponse.status})")
+    return True
+
 def envoyer_email(destinataire, sujet, html):
     """Envoie un email HTML via SMTP si configure, sinon via Resend.
     En cas d'echec SMTP (ex: ports bloques par l'hebergeur), on retombe
@@ -52,7 +82,13 @@ def envoyer_email(destinataire, sujet, html):
             print(f"✅ Email envoyé via SMTP à {destinataire}")
             return True
         except Exception as smtp_error:
-            print(f"⚠️  Échec de l'envoi SMTP ({smtp_error}) - tentative via Resend")
+            print(f"⚠️  Échec de l'envoi SMTP ({smtp_error}) - tentative suivante")
+
+    if BREVO_API_KEY:
+        try:
+            return _envoyer_brevo(destinataire, sujet, html)
+        except Exception as brevo_error:
+            print(f"⚠️  Échec de l'envoi Brevo ({brevo_error}) - tentative via Resend")
 
     if RESEND_API_KEY:
         resend.api_key = RESEND_API_KEY
@@ -65,7 +101,7 @@ def envoyer_email(destinataire, sujet, html):
         print(f"✅ Email envoyé via Resend! ID: {r['id']}")
         return True
 
-    print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY)")
+    print("⚠️  Aucun service email configuré (SMTP_*, BREVO_API_KEY ou RESEND_API_KEY)")
     return False
 
 @reservation_bp.route('/reserver')
@@ -132,8 +168,8 @@ def envoyer_confirmation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi d'email à {email} pour la réservation {reference}")
     
     # Vérifier qu'un service email est configuré
-    if not (SMTP_USER and SMTP_PASSWORD) and not RESEND_API_KEY:
-        print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY) - email non envoyé")
+    if not (SMTP_USER and SMTP_PASSWORD) and not BREVO_API_KEY and not RESEND_API_KEY:
+        print("⚠️  Aucun service email configuré (SMTP_*, BREVO_API_KEY ou RESEND_API_KEY) - email non envoyé")
         return False
 
     try:
@@ -186,8 +222,8 @@ def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
     print(f"🚀 Début de l'envoi de l'email d'annulation à {email} pour la réservation {reference}")
 
     # Vérifier qu'un service email est configuré
-    if not (SMTP_USER and SMTP_PASSWORD) and not RESEND_API_KEY:
-        print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY) - email non envoyé")
+    if not (SMTP_USER and SMTP_PASSWORD) and not BREVO_API_KEY and not RESEND_API_KEY:
+        print("⚠️  Aucun service email configuré (SMTP_*, BREVO_API_KEY ou RESEND_API_KEY) - email non envoyé")
         return False
 
     try:
@@ -242,8 +278,8 @@ def envoyer_reception_email(nom, email, date, heure, personnes, reference):
     annulation) sera envoyée par l'administrateur ultérieurement."""
     print(f"🚀 Début de l'envoi de l'email de réception à {email} pour la réservation {reference}")
 
-    if not (SMTP_USER and SMTP_PASSWORD) and not RESEND_API_KEY:
-        print("⚠️  Aucun service email configuré (SMTP_* ou RESEND_API_KEY) - email non envoyé")
+    if not (SMTP_USER and SMTP_PASSWORD) and not BREVO_API_KEY and not RESEND_API_KEY:
+        print("⚠️  Aucun service email configuré (SMTP_*, BREVO_API_KEY ou RESEND_API_KEY) - email non envoyé")
         return False
 
     try:
