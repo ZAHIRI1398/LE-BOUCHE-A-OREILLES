@@ -29,6 +29,10 @@ SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
 SMTP_USER = os.environ.get('SMTP_USER', '')
 SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+# Expediteur SMTP : le compte Gmail par defaut (Gmail reecrit le From de
+# toute facon). EMAIL_FROM reste reserve a Resend et doit utiliser un
+# domaine verifie (ex: contact@leboucheaoreilles.be).
+SMTP_FROM = os.environ.get('SMTP_FROM', '')
 
 def envoyer_email(destinataire, sujet, html):
     """Envoie un email HTML via SMTP si configure, sinon via Resend.
@@ -37,7 +41,7 @@ def envoyer_email(destinataire, sujet, html):
     if SMTP_USER and SMTP_PASSWORD:
         try:
             msg = MIMEMultipart('alternative')
-            msg['From'] = EMAIL_FROM
+            msg['From'] = SMTP_FROM or SMTP_USER
             msg['To'] = destinataire
             msg['Subject'] = sujet
             msg.attach(MIMEText(html, 'html'))
