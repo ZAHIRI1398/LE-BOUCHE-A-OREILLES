@@ -97,7 +97,7 @@ railway logs Postgres # Logs de la base de données
    - psycopg2 gère automatiquement la validation
 
 4. **Admin credentials** ⚠️
-   - Changez `ADMIN_PASSWORD` en production (actuellement: `password123`)
+   - Le mot de passe admin se règle dans la variable Railway `ADMIN_PASSWORD` (voir DEPLOIEMENT_CORRECTIFS.md)
    - Utilisez une variable d'environnement sécurisée
 
 ## 📚 Ressources

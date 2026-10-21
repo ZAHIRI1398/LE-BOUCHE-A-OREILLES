@@ -11,6 +11,9 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 from io import BytesIO
 import pymupdf
+import hmac
+import secrets
+from datetime import timedelta
 import smtplib
 import threading
 from email.mime.text import MIMEText
@@ -27,10 +30,24 @@ from reservation_client import (
     envoyer_confirmation_email,
     envoyer_annulation_email,
 )
+import reservation_client as rc
 
 app = Flask(__name__)
 app.register_blueprint(reservation_bp, url_prefix='/reservation')
-app.secret_key = 'votre_cle_secrète_plus_secrete_encore_123456'
+
+# Cle secrete des sessions : a definir dans Railway (variable SECRET_KEY).
+# L'ancienne cle etait ecrite dans le code public, ce qui permettait de
+# fabriquer une session admin sans mot de passe.
+app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+if not os.environ.get('SECRET_KEY'):
+    print("⚠️  SECRET_KEY non définie : clé temporaire utilisée (les sessions admin seront perdues à chaque redémarrage).")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',   # bloque les formulaires envoyes depuis un autre site
+    SESSION_COOKIE_SECURE=bool(os.environ.get('RAILWAY_ENVIRONMENT_NAME') or os.environ.get('RAILWAY_ENVIRONMENT')
+                               or os.environ.get('COOKIE_SECURE')),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+)
 # Configuration de la base de données
 basedir = Path(__file__).parent
 # En local (pas de DATABASE_URL) : SQLite. Sur Railway avec le plugin PostgreSQL :
@@ -76,9 +93,12 @@ def creer_tables():
     except Exception as e:
         app.logger.error(f"Erreur lors de la création des tables: {e}")
 
-# Configuration de l'admin
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin1160"  # À changer en production
+# Configuration de l'admin : identifiants dans les variables Railway
+# ADMIN_USERNAME et ADMIN_PASSWORD (plus jamais dans le code, qui est public).
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
+if not ADMIN_PASSWORD:
+    print("⚠️  ADMIN_PASSWORD non défini : la connexion admin est désactivée.")
 
 # Protection des routes admin
 def login_required(f):
@@ -89,15 +109,32 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def identifiants_valides(username, password):
+    if not ADMIN_PASSWORD:
+        return False
+    return (hmac.compare_digest((username or '').encode(), ADMIN_USERNAME.encode())
+            and hmac.compare_digest((password or '').encode(), ADMIN_PASSWORD.encode()))
+
 # Route de connexion admin
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
+        cle = f'login:{rc.adresse_ip()}'
+        # 5 essais ratés en 15 minutes : on bloque (protection contre les
+        # robots qui testent des mots de passe).
+        if rc.limite_atteinte(cle, 5, 900, enregistrer=False):
+            flash('Trop de tentatives. Réessayez dans 15 minutes.', 'danger')
+            return render_template('admin_login.html'), 429
         username = request.form.get('username')
         password = request.form.get('password')
-        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        if identifiants_valides(username, password):
+            session.clear()
+            session.permanent = True
             session['admin_logged_in'] = True
             return redirect(url_for('afficher_toutes_reservations'))
+        rc.limite_atteinte(cle, 5, 900)   # compte l'essai rate
+        if not ADMIN_PASSWORD:
+            flash("Connexion désactivée : le mot de passe admin n'est pas configuré (variable ADMIN_PASSWORD).", 'danger')
         else:
             flash('Identifiants incorrects', 'danger')
     return render_template('admin_login.html')
@@ -207,6 +244,7 @@ def page_accueil():
     return render_template('accueil.html', today=date.today().isoformat())
 
 @app.route('/ajouter_menu')
+@login_required
 def ajouter_menu():
     return render_template('ajouter-menu.html')
 
@@ -282,6 +320,7 @@ def admin_ajouter_plat_action():
     return redirect(url_for('ajouter_plat'))
 
 @app.route('/changer_statut/<int:id>', methods=['POST'])
+@login_required
 def changer_statut(id):
     if 'nouveau_statut' not in request.form:
         flash('Statut non spécifié', 'error')
@@ -500,6 +539,7 @@ def export_menu_pdf():
 
 
 @app.route('/supprimer_plat/<int:plat_id>', methods=['POST'])
+@login_required
 def supprimer_plat(plat_id):
     try:
         plat = Plat.query.get_or_404(plat_id)
@@ -697,6 +737,12 @@ def modifier_reservation(id):
 
 @app.route('/confirmation-groupe/<groupe_reference>')
 def confirmation_groupe(groupe_reference):
+    # Page visible uniquement par la personne qui vient de reserver (ou
+    # par l'admin) : les anciennes references de groupe etaient
+    # sequentielles, donc faciles a deviner (noms des clients visibles).
+    if session.get('derniere_reservation') != groupe_reference and not session.get('admin_logged_in'):
+        flash("Cette page n'est plus disponible. Pour toute question sur votre réservation, appelez-nous au 0471 24 32 79.", 'info')
+        return redirect(url_for('page_accueil'))
     try:
         reservations = Reservation.query.filter_by(groupe_reference=groupe_reference).order_by(Reservation.date).all()
 

@@ -32,14 +32,14 @@
 6. Cliquez sur **"Add Variable"**
 7. Remplissez :
    - **Name** : `RESEND_API_KEY`
-   - **Value** : collez votre clé API (ex: `re_VxpPtEic...`)
+   - **Value** : collez votre clé API (ex: `re_xxxxxxxx...`)
 8. Cliquez sur **"Save"** ✅
 
 #### Méthode 2 : Via Railway CLI
 
 ```bash
 # Si vous avez Railway CLI installé
-railway env RESEND_API_KEY=re_VxpPtEic...
+railway env RESEND_API_KEY=re_xxxxxxxx...
 railway up
 ```
 
@@ -109,7 +109,7 @@ Cela signifie que :
 
 | Variable | Description | Exemple |
 |----------|-------------|---------|
-| `RESEND_API_KEY` | Clé API Resend | `re_VxpPtEic...` |
+| `RESEND_API_KEY` | Clé API Resend | `re_xxxxxxxx...` |
 | `EMAIL_FROM` | Adresse email d'envoi | `contact@leboucheaoreilles.be` |
 | `TEST_EMAIL_REDIRECT` | (Optionnel) Rediriger les emails vers une adresse de test | `admin@test.com` |
 

@@ -5,6 +5,8 @@ import smtplib
 import threading
 import json
 import urllib.request
+import time
+from collections import defaultdict, deque
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, date
@@ -42,6 +44,33 @@ SMTP_FROM = os.environ.get('SMTP_FROM', '')
 BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
 BREVO_FROM = os.environ.get('BREVO_FROM', '')
 BREVO_FROM_NAME = os.environ.get('BREVO_FROM_NAME', 'Restaurant Le Bouche à Oreilles')
+
+def adresse_ip():
+    """IP du visiteur (le site passe par Cloudflare puis Railway)."""
+    return (request.headers.get('CF-Connecting-IP')
+            or request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+            or request.remote_addr or 'inconnue')
+
+
+_compteurs = defaultdict(deque)
+_verrou_compteurs = threading.Lock()
+
+
+def limite_atteinte(cle, maximum, fenetre_secondes, enregistrer=True):
+    """Compteur en memoire : True si `cle` a deja ete vue `maximum` fois
+    pendant la fenetre. Suffisant contre les robots du formulaire et les
+    essais de mot de passe (remis a zero a chaque redemarrage)."""
+    maintenant = time.time()
+    with _verrou_compteurs:
+        file = _compteurs[cle]
+        while file and maintenant - file[0] > fenetre_secondes:
+            file.popleft()
+        if len(file) >= maximum:
+            return True
+        if enregistrer:
+            file.append(maintenant)
+        return False
+
 
 def _envoyer_brevo(destinataire, sujet, html):
     payload = {
