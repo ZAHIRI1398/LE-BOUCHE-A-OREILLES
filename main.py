@@ -808,7 +808,8 @@ def confirmation_groupe(groupe_reference):
 
         toutes_confirmees = all(r.statut == 'confirmee' for r in reservations)
         return render_template('confirmation_groupe.html', reservations=reservations, premiere=reservations[0],
-                               toutes_confirmees=toutes_confirmees, telephone_resto=rc.RESTAURANT_TEL)
+                               toutes_confirmees=toutes_confirmees, telephone_resto=rc.RESTAURANT_TEL,
+                               lien_modif=url_for('reservation.modifier', jeton=rc.jeton_modification(groupe_reference)))
 
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération de la réservation: {str(e)}")
@@ -960,7 +961,7 @@ def supprimer_fermeture(id):
 
 @app.context_processor
 def outils_templates():
-    return {'date_fr': rc.date_fr}
+    return {'date_fr': rc.date_fr, 'tel_lien': rc.RESTAURANT_TEL_LIEN, 'tel_resto': rc.RESTAURANT_TEL}
 
 
 @app.template_filter('heure_locale')

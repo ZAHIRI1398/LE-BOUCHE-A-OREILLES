@@ -74,7 +74,7 @@ def test_capacite_respectee(app, client, mails):
 
 def test_dates_invalides_refusees(app, client, mails):
     hier = (date.today() - timedelta(days=1)).isoformat()
-    for dates in (hier, prochain_samedi(), 'n-importe-quoi', ','.join(jours_ouvrables(11)),
+    for dates in (hier, prochain_samedi(), 'n-importe-quoi', ','.join(jours_ouvrables(rc.MAX_DATES_PAR_DEMANDE + 1)),
                   (date.today() + timedelta(days=400)).isoformat()):
         client.post('/reservation/creer_reservation', data=formulaire(dates=dates))
     assert reservations(app) == []
@@ -242,3 +242,115 @@ def test_pages_publiques_et_admin_s_affichent(app, client, admin):
     for url in ('/admin/reservations', '/admin/reservations/par-date', '/admin/reservations/ajouter',
                 '/admin/fermetures', '/admin/menu'):
         assert admin.get(url).status_code == 200, url
+
+
+# --- Le client modifie lui-même sa réservation ---------------------------------
+
+import re  # noqa: E402
+
+
+def chemin_modif(mails, adresse):
+    """Chemin du lien « Modifier ou annuler ma réservation » du dernier email."""
+    html = mails.pour(adresse)[-1]['html']
+    return re.search(r'https?://[^/"]+(/reservation/modifier/[^"<\s]+)', html).group(1)
+
+
+def test_lien_de_modification_dans_l_email(app, client, mails):
+    client.post('/reservation/creer_reservation', data=formulaire())
+    page = app.test_client().get(chemin_modif(mails, 'jeanne@example.org'))   # depuis un autre appareil
+    assert page.status_code == 200 and 'Ma réservation' in page.get_data(as_text=True)
+
+
+def test_lien_falsifie_refuse(app, client):
+    assert client.get('/reservation/modifier/faux.jeton').status_code == 404
+
+
+def test_client_passe_de_2_a_4_personnes(app, client, mails):
+    client.post('/reservation/creer_reservation', data=formulaire())
+    resa = reservations(app)[0]
+    app.test_client().post(chemin_modif(mails, 'jeanne@example.org'), data={f'personnes_{resa.id}': '4'})
+    assert reservations(app)[0].personnes == 4
+    assert 'de 2 à 4 personnes' in mails.pour('resto@example.org')[-1]['html']
+    assert 'Votre réservation est modifiée' in mails.pour('jeanne@example.org')[-1]['html']
+
+
+def test_modification_refusee_sans_place(app, client, mails):
+    jour = jours_ouvrables(1)[0]
+    with app.app_context():
+        db.session.add(Reservation(reference=f'Table1-{jour}', nom='X', email='x@example.org', date=jour,
+                                   heure='11:55', personnes=rc.max_personnes_pour_date(jour) - 2, statut='confirmee'))
+        db.session.commit()
+    client.post('/reservation/creer_reservation', data=formulaire(dates=jour))
+    resa = [r for r in reservations(app) if r.email == 'jeanne@example.org'][0]
+    app.test_client().post(chemin_modif(mails, 'jeanne@example.org'), data={f'personnes_{resa.id}': '5'})
+    assert [r for r in reservations(app) if r.email == 'jeanne@example.org'][0].personnes == 2
+
+
+def test_client_annule_une_des_deux_dates(app, client, mails):
+    client.post('/reservation/creer_reservation', data=formulaire(dates=','.join(jours_ouvrables(2))))
+    premiere, seconde = reservations(app)
+    app.test_client().post(chemin_modif(mails, 'jeanne@example.org'), data={f'annuler_{premiere.id}': '1'})
+    premiere, seconde = reservations(app)
+    assert premiere.statut == 'annulee' and seconde.statut == 'en_attente'
+    assert 'annulée par le client' in mails.pour('resto@example.org')[-1]['html']
+
+
+def test_passer_a_plus_de_10_remet_en_attente(app, client, mails, monkeypatch):
+    monkeypatch.setattr(rc, 'CONFIRMATION_AUTOMATIQUE', True)
+    client.post('/reservation/creer_reservation', data=formulaire(personnes='8'))
+    resa = reservations(app)[0]
+    assert resa.statut == 'confirmee'
+    app.test_client().post(chemin_modif(mails, 'jeanne@example.org'), data={f'personnes_{resa.id}': '12'})
+    resa = reservations(app)[0]
+    assert resa.personnes == 12 and resa.statut == 'en_attente'
+
+
+def test_le_jour_meme_on_telephone(app, client, mails):
+    with app.app_context():
+        db.session.add(Reservation(reference='Table1-auj', groupe_reference='Groupe-aujourdhui', nom='Y',
+                                   email='y@example.org', date=date.today().isoformat(), heure='11:55',
+                                   personnes=2, statut='confirmee'))
+        db.session.commit()
+        jeton = rc.jeton_modification('Groupe-aujourdhui')
+        resa_id = Reservation.query.filter_by(reference='Table1-auj').first().id
+    page = client.get(f'/reservation/modifier/{jeton}').get_data(as_text=True)
+    assert 'appelez-nous' in page and 'Enregistrer le nombre de personnes' not in page
+    client.post(f'/reservation/modifier/{jeton}', data={f'personnes_{resa_id}': '5'})
+    assert reservations(app)[0].personnes == 2
+
+
+def test_doublon_meme_email_renvoie_le_lien(app, client, mails):
+    client.post('/reservation/creer_reservation', data=formulaire(personnes='8'))
+    client.post('/reservation/creer_reservation', data=formulaire(personnes='10'))   # « la table de 8 passée à 10 »
+    assert len(reservations(app)) == 1
+    dernier = mails.pour('jeanne@example.org')[-1]['html']
+    assert 'Vous avez déjà une réservation' in dernier and '/reservation/modifier/' in dernier
+
+
+def test_doublon_meme_telephone_autre_email(app, client, mails):
+    client.post('/reservation/creer_reservation', data=formulaire())
+    client.post('/reservation/creer_reservation',
+                data=formulaire(email='autre@example.org', telephone='+32 470 12 34 56'))
+    assert len(reservations(app)) == 1
+    assert mails.pour('autre@example.org') == []      # le lien part vers l'adresse déjà connue
+
+
+def test_apres_une_erreur_la_saisie_reste_affichee(app, client, mails):
+    r = client.post('/reservation/creer_reservation',
+                    data=formulaire(nom='Marie Lambert', telephone='12', message='Anniversaire'))
+    page = r.get_data(as_text=True)
+    assert r.status_code == 400
+    assert 'value="Marie Lambert"' in page and 'value="jeanne@example.org"' in page and 'Anniversaire</textarea>' in page
+    assert 'tel:+32471243279' in page          # numero cliquable sur telephone
+
+
+def test_un_habitue_reserve_20_jours_d_un_coup(app, client, mails):
+    client.post('/reservation/creer_reservation', data=formulaire(dates=','.join(jours_ouvrables(20))))
+    assert len(reservations(app)) == 20
+    assert len(mails.pour('jeanne@example.org')) == 1 and len(mails.pour('resto@example.org')) == 1
+
+
+def test_annuler_toutes_les_dates_d_un_coup(app, client, mails):
+    client.post('/reservation/creer_reservation', data=formulaire(dates=','.join(jours_ouvrables(3))))
+    app.test_client().post(chemin_modif(mails, 'jeanne@example.org'), data={'annuler_tout': '1'})
+    assert [r.statut for r in reservations(app)] == ['annulee'] * 3

@@ -1,10 +1,11 @@
 # Correctifs réservations : ce qui change et comment déployer
 
-Branche `correctifs-reservations`, trois commits :
+Branche `correctifs-reservations`, quatre commits :
 
 1. **Sécurité** : mot de passe admin et clé de session sortis du code, routes admin protégées, fichiers contenant des secrets supprimés.
 2. **Réservations** : le restaurant est prévenu à chaque demande, chaque email est noté et visible dans l'admin, confirmation automatique possible, protection contre les robots, saisie des réservations prises par téléphone, jours fermés.
-3. **Tests** : 25 tests automatiques (SQLite et PostgreSQL) et ce document.
+3. **Tests** : tests automatiques (SQLite et PostgreSQL) et ce document.
+4. **Côté client** : le client modifie ou annule lui-même sa réservation, les doublons sont évités, les pages et les emails sont plus faciles à lire et à utiliser (une bonne partie de la clientèle est âgée).
 
 Le premier commit peut partir seul et tout de suite. Les deux autres touchent au fonctionnement du restaurant et demandent l'avis de l'équipe (voir « Décisions »).
 
@@ -26,7 +27,9 @@ Ensuite, passer le dépôt en **privé** (GitHub → Settings → General → Da
 | `ADMIN_USERNAME` | `admin` par défaut | Facultatif. |
 | `SECRET_KEY` | longue chaîne aléatoire | Générer avec `python -c "import secrets; print(secrets.token_hex(32))"`. Sans elle, les sessions admin sautent à chaque redémarrage. |
 | `RESTAURANT_EMAIL` | adresse qui reçoit chaque nouvelle réservation | Par défaut `stbernadette.restaurant@gmail.com` (l'adresse affichée sur le site). Les clients qui répondent à un email tombent aussi dessus. |
-| `RESTAURANT_TEL` | `0471 24 32 79` par défaut | Affiché dans les emails et les messages d'erreur. |
+| `RESTAURANT_TEL` | `0471 24 32 79` par défaut | Affiché dans les emails et les messages d'erreur, et cliquable sur téléphone. |
+| `SITE_URL` | `https://www.leboucheaoreilles.be` par défaut | Adresse utilisée dans les liens des emails. |
+| `MAX_DATES_PAR_DEMANDE` | `40` par défaut | Nombre de dates qu'on peut cocher en une demande. |
 | `CONFIRMATION_AUTOMATIQUE` | `1` pour l'activer | Désactivée par défaut (comportement actuel). Voir « Décisions ». |
 | `TEST_EMAIL_REDIRECT` | **vide ou supprimée** | Si elle est remplie, aucun client ne reçoit ses emails. L'admin affiche maintenant un bandeau rouge dans ce cas. |
 | `SMTP_USER` / `SMTP_PASSWORD` | à supprimer sur l'offre Hobby | Railway bloque le SMTP sur les offres Free, Trial et Hobby : chaque email perd 15 secondes avant de passer au canal suivant. |
@@ -49,10 +52,14 @@ L'instruction `ALTER COLUMN ... TYPE VARCHAR(30)` ne tourne plus que sur Postgre
 - **Groupes de plus de 10 personnes** : l'option « Plus de 10 » enregistrait 0 personne, donc le groupe ne comptait pas dans les places. Le client doit maintenant donner le nombre exact, et un groupe reste toujours à valider à la main.
 - **Fiche « Modifier »** : enregistrer une fiche remplaçait 11:55 par 12:00 (option absente de la liste). Corrigé.
 
+- **Le client modifie ou annule lui-même** : chaque email client contient un gros bouton « Modifier ou annuler ma réservation » (lien personnel, signé avec `SECRET_KEY`, impossible à deviner). Il change le nombre de personnes avec des boutons − et + (les places sont contrôlées) ou annule un jour, jusqu'à la veille. Le jour même, il téléphone. Le restaurant reçoit un email à chaque changement, et une table qui passe au-delà de 10 personnes repasse « en attente ». Si `SECRET_KEY` change, les anciens liens ne marchent plus.
+- **Plus de doublons** : une table de 8 qui repasse pour 10 créait une deuxième réservation. Maintenant, si quelqu'un réserve le même jour avec le même email ou le même téléphone, rien n'est créé : le lien de modification est renvoyé à l'adresse déjà connue.
+- **Plus facile à lire et à utiliser** : textes, champs et boutons plus grands sur les pages client et dans les emails ; après une erreur, ce que le client a tapé reste affiché ; bouton pour appeler le restaurant directement depuis un téléphone ; légende des couleurs sous le calendrier ; pour les habitués, un clic sur la lettre d'un jour (L, M, M, J, V) coche tous ces jours-là du mois, et un bouton coche tous les jours libres du mois ; sur la page « Ma réservation », un réglage « même nombre pour toutes les dates » et un bouton « Annuler toutes mes dates » ; remplissage automatique du nom, de l'email et du téléphone par le navigateur.
+
 ## Protection du formulaire
 
 - Champ piège invisible pour les robots.
-- 5 demandes maximum par heure et par adresse IP, 10 dates maximum par demande.
+- 5 demandes maximum par heure et par adresse IP, 40 dates maximum par demande (les habitués réservent parfois 15 ou 20 fois par mois ; réglable avec `MAX_DATES_PAR_DEMANDE`).
 - Contrôle serveur des dates (pas de date passée, pas de week-end, pas plus de 6 mois à l'avance, pas de jour fermé), du nombre de personnes, de l'email et du téléphone.
 - Le nom et le message du client sont échappés dans les emails : impossible d'y glisser un lien ou du HTML (sinon le formulaire peut servir à envoyer du spam au nom du restaurant).
 - Le bouton « Réserver » se désactive après le clic (doubles envois).

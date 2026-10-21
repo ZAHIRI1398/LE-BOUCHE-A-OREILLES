@@ -69,6 +69,29 @@
     .step-text { padding-top: .25rem; line-height: 1.45; }
     .step-text strong { color: #4a2f1f; }
     .step-text small { color: #6c757d; }
+    /* Lisibilité (une bonne partie de la clientèle est âgée) : textes et champs plus grands */
+    #form-reservation .form-label { font-size: 1.15rem; font-weight: 600; }
+    #form-reservation .form-control, #form-reservation .form-select { font-size: 1.2rem; padding: .65rem .9rem; }
+    #form-reservation .btn-lg { font-size: 1.4rem; padding: .9rem; }
+    .guide-steps .step-text { font-size: 1.1rem; }
+    .guide-steps .step-text small { font-size: 1rem; }
+    .calendrier-case { font-size: 1.15rem; font-weight: 600; }
+    .calendrier-entete .mois-label { font-size: 1.3rem; }
+    .calendrier-nav { width: 48px; height: 48px; font-size: 1.5rem; }
+    .date-chip { font-size: 1rem; }
+    .legende-calendrier { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: .75rem; font-size: 1rem; color: #495057; }
+    .legende-calendrier i { display: inline-block; width: 22px; height: 22px; border-radius: 5px; vertical-align: -5px; margin-right: .35rem; border: 1px solid #dee2e6; }
+    .legende-calendrier .libre { background: #fff; }
+    .legende-calendrier .choisi { background: #cf7a3e; }
+    .legende-calendrier .complet { background: #e74c3c; }
+    .legende-calendrier .ferme { background: repeating-linear-gradient(45deg, #f8f9fa, #f8f9fa 4px, #dfe3e7 4px, #dfe3e7 8px); }
+    .appel-direct { font-size: 1.1rem; margin: -.25rem 0 1.25rem; }
+    .calendrier-jour-nom { font-size: 1rem; }
+    .calendrier-jour-nom.cliquable { border: 2px solid #e3d5c5; background: #f8f1e8; color: #7a4a24; border-radius: 8px;
+                                     padding: .3rem 0; font-weight: 700; cursor: pointer; }
+    .calendrier-jour-nom.cliquable:hover { background: #f1e7da; }
+    .raccourcis-mois { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: .75rem; }
+    .raccourcis-mois .astuce { font-size: .98rem; color: #495057; }
 </style>
 {% endblock %}
 
@@ -79,6 +102,9 @@
             <!-- Guide : comment réserver -->
             <div class="guide-steps">
                 <h2><i class="fas fa-info-circle me-2"></i>Comment réserver une table ?</h2>
+                <p class="appel-direct">Vous préférez téléphoner ?
+                    <a href="tel:{{ tel_lien }}" class="btn btn-outline-primary btn-lg ms-1"><i class="fas fa-phone me-2"></i>{{ telephone_resto }}</a>
+                </p>
                 <div class="step-item">
                     <div class="step-num">1</div>
                     <div class="step-text">
@@ -97,7 +123,7 @@
                     <div class="step-num">3</div>
                     <div class="step-text">
                         <strong>Sélectionnez une ou plusieurs dates dans le calendrier</strong><br>
-                        <small>Naviguez avec les flèches ‹ › pour changer de mois. Cliquez sur les dates souhaitées (en orange). Vous pouvez sélectionner <strong>plusieurs dates</strong> en une seule demande. Les week-ends et jours passés ne sont pas disponibles.</small>
+                        <small>Naviguez avec les flèches ‹ › pour changer de mois. Cliquez sur les dates souhaitées (en orange). Vous pouvez choisir <strong>plusieurs dates</strong> en une seule demande (jusqu'à {{ max_dates }}). Pour prendre par exemple tous les jeudis du mois, cliquez sur la lettre « J » en haut du calendrier. Les week-ends et jours passés ne sont pas disponibles.</small>
                     </div>
                 </div>
                 <div class="step-item">
@@ -116,6 +142,7 @@
                         {% else %}
                         <small>Vous recevrez d'abord un email de <strong>réception de votre demande</strong> (ce n'est pas encore une confirmation). Notre équipe valide ensuite votre réservation et vous envoie la <strong>confirmation</strong> par email.</small>
                         {% endif %}
+                        <br><small>Un changement ensuite (nombre de personnes, annulation) ? Utilisez le bouton « Modifier ou annuler ma réservation » de votre email : inutile de refaire une réservation.</small>
                         <br><small>Pas d'email ? Regardez dans le dossier « courrier indésirable » ou appelez-nous au <strong>{{ telephone_resto }}</strong>. Vous pouvez aussi réserver par téléphone.</small>
                     </div>
                 </div>
@@ -133,36 +160,30 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="nom" class="form-label">Nom complet</label>
-                                <input type="text" class="form-control" id="nom" name="nom" required>
+                                <input type="text" class="form-control" id="nom" name="nom" value="{{ valeurs.get('nom', '') }}" autocomplete="name" placeholder="ex. Marie Dupont" required>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" required>
+                                <input type="email" class="form-control" id="email" name="email" value="{{ valeurs.get('email', '') }}" autocomplete="email" placeholder="ex. marie.dupont@exemple.be" required>
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="telephone" class="form-label">Téléphone</label>
-                                <input type="tel" class="form-control" id="telephone" name="telephone" required>
+                                <input type="tel" class="form-control" id="telephone" name="telephone" value="{{ valeurs.get('telephone', '') }}" autocomplete="tel" placeholder="ex. 0470 12 34 56" required>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="personnes" class="form-label">Nombre de personnes</label>
                                 <select class="form-select" id="personnes" name="personnes" required>
-                                    <option value="1">1 personne</option>
-                                    <option value="2" selected>2 personnes</option>
-                                    <option value="3">3 personnes</option>
-                                    <option value="4">4 personnes</option>
-                                    <option value="5">5 personnes</option>
-                                    <option value="6">6 personnes</option>
-                                    <option value="7">7 personnes</option>
-                                    <option value="8">8 personnes</option>
-                                    <option value="9">9 personnes</option>
-                                    <option value="10">10 personnes</option>
-                                    <option value="0">Plus de 10 personnes</option>
+                                    {% set p_choisi = valeurs.get('personnes', '2') %}
+                                    {% for n in range(1, 11) %}
+                                    <option value="{{ n }}" {% if p_choisi == n|string %}selected{% endif %}>{{ n }} personne{{ 's' if n > 1 }}</option>
+                                    {% endfor %}
+                                    <option value="0" {% if p_choisi == '0' %}selected{% endif %}>Plus de 10 personnes</option>
                                 </select>
                                 <div id="bloc-groupe" class="mt-2" style="display: none;">
                                     <label for="personnes_groupe" class="form-label small mb-1">Nombre exact de personnes</label>
-                                    <input type="number" class="form-control" id="personnes_groupe" name="personnes_groupe" min="11" max="60" inputmode="numeric">
+                                    <input type="number" class="form-control" id="personnes_groupe" name="personnes_groupe" value="{{ valeurs.get('personnes_groupe', '') }}" min="11" max="60" inputmode="numeric">
                                     <small class="text-muted">Pour un groupe, notre équipe vous recontacte avant de confirmer.</small>
                                 </div>
                             </div>
@@ -186,6 +207,16 @@
                                     <button type="button" class="calendrier-nav" id="mois-suivant" aria-label="Mois suivant">›</button>
                                 </div>
                                 <div class="calendrier-grille" id="calendrier-grille"></div>
+                                <div class="raccourcis-mois">
+                                    <button type="button" class="btn btn-outline-primary" id="tout-le-mois">Choisir tous les jours libres de ce mois</button>
+                                    <span class="astuce">ou cliquez sur une lettre (L, M, M, J, V) pour tous les lundis, mardis… du mois</span>
+                                </div>
+                                <div class="legende-calendrier" aria-hidden="true">
+                                    <span><i class="libre"></i>libre : cliquez</span>
+                                    <span><i class="choisi"></i>votre choix</span>
+                                    <span><i class="complet"></i>complet</span>
+                                    <span><i class="ferme"></i>fermé</span>
+                                </div>
                             </div>
                             <div class="dates-choisies" id="dates-choisies">
                                 <span class="text-muted small">Aucune date sélectionnée pour l'instant.</span>
@@ -195,7 +226,7 @@
 
                         <div class="mb-3">
                             <label for="message" class="form-label">Demandes spéciales (optionnel)</label>
-                            <textarea class="form-control" id="message" name="message" rows="3"></textarea>
+                            <textarea class="form-control" id="message" name="message" rows="3">{{ valeurs.get('message', '') }}</textarea>
                         </div>
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary btn-lg">
@@ -222,7 +253,8 @@ document.addEventListener('DOMContentLoaded', function () {
     aujourdhui.setHours(0, 0, 0, 0);
 
     let moisAffiche = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), 1);
-    const datesSelectionnees = new Set();
+    // Apres une erreur, les dates deja choisies restent cochees
+    const datesSelectionnees = new Set(({{ valeurs.get('dates', '')|tojson }}).split(',').filter(iso => iso && iso >= versISO(aujourdhui)));
 
     // Occupation des dates : { "2026-09-10": 20, ... }
     // Les dates ayant atteint le maximum ne sont pas cliquables.
@@ -251,6 +283,47 @@ document.addEventListener('DOMContentLoaded', function () {
     const suivantBtn = document.getElementById('mois-suivant');
     const choisiesEl = document.getElementById('dates-choisies');
     const inputEl = document.getElementById('dates-input');
+
+    const NOMS_JOURS_LONGS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+
+    function estDisponible(date) {
+        const iso = versISO(date);
+        if (date.getDay() === 0 || date.getDay() === 6 || date < aujourdhui || joursFermes[iso]) return false;
+        return (occupationDates[iso] || 0) < maxPourLaDate(iso, date.getDay());
+    }
+
+    // Jours libres du mois affiché ; indexJour : 0 = lundi ... 4 = vendredi, null = tous
+    function joursLibresDuMois(indexJour) {
+        const annee = moisAffiche.getFullYear(), mois = moisAffiche.getMonth();
+        const nbJours = new Date(annee, mois + 1, 0).getDate();
+        const liste = [];
+        for (let jour = 1; jour <= nbJours; jour++) {
+            const date = new Date(annee, mois, jour);
+            if ((indexJour === null || (date.getDay() + 6) % 7 === indexJour) && estDisponible(date)) {
+                liste.push(versISO(date));
+            }
+        }
+        return liste;
+    }
+
+    // Tout est déjà choisi : on retire ; sinon on ajoute (dans la limite)
+    function basculer(liste) {
+        if (liste.length === 0) return;
+        if (liste.every(iso => datesSelectionnees.has(iso))) {
+            liste.forEach(iso => datesSelectionnees.delete(iso));
+        } else {
+            for (const iso of liste) {
+                if (datesSelectionnees.has(iso)) continue;
+                if (datesSelectionnees.size >= MAX_DATES) {
+                    alert('Vous pouvez choisir au maximum ' + MAX_DATES + ' dates par demande.');
+                    break;
+                }
+                datesSelectionnees.add(iso);
+            }
+        }
+        majResume();
+        dessinerCalendrier();
+    }
 
     function versISO(date) {
         const y = date.getFullYear();
@@ -301,10 +374,18 @@ document.addEventListener('DOMContentLoaded', function () {
         suivantBtn.disabled = (annee === limiteMax.getFullYear() && mois === limiteMax.getMonth());
 
         grilleEl.innerHTML = '';
-        NOMS_JOURS.forEach(j => {
-            const el = document.createElement('div');
-            el.className = 'calendrier-jour-nom';
+        NOMS_JOURS.forEach((j, index) => {
+            // Lettres du lundi au vendredi cliquables : tous ces jours-là du mois d'un coup
+            const cliquable = index < 5;
+            const el = document.createElement(cliquable ? 'button' : 'div');
+            el.className = 'calendrier-jour-nom' + (cliquable ? ' cliquable' : '');
             el.textContent = j;
+            if (cliquable) {
+                el.type = 'button';
+                el.title = 'Choisir tous les ' + NOMS_JOURS_LONGS[index] + 's libres de ce mois';
+                el.setAttribute('aria-label', el.title);
+                el.addEventListener('click', () => basculer(joursLibresDuMois(index)));
+            }
             grilleEl.appendChild(el);
         });
 
@@ -360,6 +441,8 @@ document.addEventListener('DOMContentLoaded', function () {
             grilleEl.appendChild(el);
         }
     }
+
+    document.getElementById('tout-le-mois').addEventListener('click', () => basculer(joursLibresDuMois(null)));
 
     precedentBtn.addEventListener('click', function () {
         moisAffiche = new Date(moisAffiche.getFullYear(), moisAffiche.getMonth() - 1, 1);

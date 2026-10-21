@@ -1,6 +1,14 @@
 <!-- templates/confirmation_groupe.html -->
 {% extends "base.html" %}
 {% block title %}Confirmation de Réservation - BOUCHE A OREILLE{% endblock %}
+{% block extra_css %}
+<style>
+    /* Lisibilité : grands caractères */
+    .card-body { font-size: 1.15rem; }
+    .card-body .lead { font-size: 1.35rem; }
+    .card-body h1 { font-size: 2rem; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container my-5">
@@ -65,8 +73,15 @@
                             <li>Vous recevrez un email de confirmation (ou, le cas échéant, d'annulation).</li>
                             {% endif %}
                             <li>Pas d'email ? Regardez dans le dossier « courrier indésirable » (spam).</li>
-                            <li>Pour toute question ou un empêchement, appelez-nous au {{ telephone_resto }}.</li>
+                            <li>Pour toute question ou un empêchement, appelez-nous au <a href="tel:{{ tel_lien }}">{{ telephone_resto }}</a>.</li>
                         </ul>
+                    </div>
+
+                    <div class="mb-4">
+                        <a href="{{ lien_modif }}" class="btn btn-outline-primary btn-lg px-4 py-3" style="font-size: 1.3rem;">
+                            <i class="fas fa-pen me-2"></i>Modifier ou annuler ma réservation
+                        </a>
+                        <p class="text-muted mt-2 mb-0">Le même bouton se trouve dans votre email.</p>
                     </div>
 
                     <div class="mt-4">

@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify, current_app
+from itsdangerous import URLSafeSerializer, BadSignature
 from flask_login import login_required
 import resend
 import smtplib
@@ -57,6 +58,11 @@ BREVO_FROM_NAME = os.environ.get('BREVO_FROM_NAME', 'Restaurant Le Bouche à Ore
 # réservation, et les clients qui répondent à un email tombent dessus.
 RESTAURANT_EMAIL = os.environ.get('RESTAURANT_EMAIL', 'stbernadette.restaurant@gmail.com')
 RESTAURANT_TEL = os.environ.get('RESTAURANT_TEL', '0471 24 32 79')
+# Numero cliquable sur telephone (tel:+32...)
+_chiffres_resto = re.sub(r'\D', '', RESTAURANT_TEL)
+RESTAURANT_TEL_LIEN = '+32' + _chiffres_resto[1:] if _chiffres_resto.startswith('0') else '+' + _chiffres_resto
+# Adresse publique du site, pour les liens envoyes par email.
+SITE_URL = os.environ.get('SITE_URL', 'https://www.leboucheaoreilles.be').rstrip('/')
 
 # Confirmation automatique : s'il reste de la place, la réservation est
 # confirmée tout de suite (le client reçoit directement sa confirmation).
@@ -65,7 +71,8 @@ RESTAURANT_TEL = os.environ.get('RESTAURANT_TEL', '0471 24 32 79')
 CONFIRMATION_AUTOMATIQUE = os.environ.get('CONFIRMATION_AUTOMATIQUE', '0') == '1'
 
 # Garde-fous du formulaire public
-MAX_DATES_PAR_DEMANDE = 10
+# Les habitues reservent parfois 15 ou 20 fois par mois : 40 dates d'un coup (environ 2 mois de service)
+MAX_DATES_PAR_DEMANDE = int(os.environ.get('MAX_DATES_PAR_DEMANDE', '40'))
 MAX_PERSONNES_EN_LIGNE = 10       # au-dela : demande de groupe, validee a la main
 GROUPE_MAX = 60
 HEURES_SERVICE = ('11:55',)
@@ -76,7 +83,7 @@ EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Or
 EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
 EMAIL_SUBJECT_RECEPTION = 'Réception de votre demande de réservation - Restaurant Le Bouche à Oreilles'
 
-TYPES_MAIL_CLIENT = ('reception', 'confirmation', 'annulation')
+TYPES_MAIL_CLIENT = ('reception', 'confirmation', 'annulation', 'modification', 'lien_modification')
 
 if TEST_EMAIL_REDIRECT:
     print(f"⚠️  TEST_EMAIL_REDIRECT est actif : tous les emails partent vers {TEST_EMAIL_REDIRECT} et AUCUN client ne les reçoit.")
@@ -161,7 +168,21 @@ def donnees_reservation(r):
         'groupe_reference': r.groupe_reference,
         'message': r.message or '',
         'statut': r.statut,
+        'lien_modif': lien_modification(r.groupe_reference),
     }
+
+
+def jeton_modification(groupe_reference):
+    """Jeton signe (impossible a deviner ou a fabriquer) qui donne acces
+    a la page « Modifier ma reservation » d'un groupe de reservations."""
+    return URLSafeSerializer(current_app.secret_key, salt='modifier-reservation').dumps(groupe_reference)
+
+
+def lien_modification(groupe_reference):
+    """Lien complet envoye au client dans ses emails."""
+    if not groupe_reference:
+        return ''
+    return f"{SITE_URL}/reservation/modifier/{jeton_modification(groupe_reference)}"
 
 
 # ---------------------------------------------------------------------------
@@ -267,23 +288,32 @@ def _journaliser(type_mail, destinataire, reference, ok, canal, erreur):
         print(f"⚠️  Impossible d'écrire le journal des emails : {e}")
 
 
-def _gabarit(titre, couleur, intro_html, lignes, conclusion_html):
-    """Mise en page commune des emails (styles en ligne pour les
-    messageries)."""
+def _gabarit(titre, couleur, intro_html, lignes, conclusion_html, bouton=None):
+    """Mise en page commune des emails : grands caracteres (une bonne partie
+    de nos clients sont ages), styles en ligne pour les messageries."""
     details = ''.join(
-        f'<li style="margin: 8px 0;"><strong>{html.escape(libelle)} :</strong> {valeur}</li>'
+        f'<li style="margin: 10px 0;"><strong>{html.escape(libelle)} :</strong> {valeur}</li>'
         for libelle, valeur in lignes
     )
+    bloc_bouton = ''
+    if bouton:
+        url, libelle_bouton = html.escape(bouton[0]), html.escape(bouton[1])
+        bloc_bouton = f"""
+        <div style="text-align: center; margin: 24px 0;">
+            <a href="{url}" style="background-color: #cf7a3e; color: #ffffff; text-decoration: none; font-size: 20px; font-weight: bold; padding: 16px 28px; border-radius: 8px; display: inline-block;">{libelle_bouton}</a>
+            <p style="font-size: 14px; color: #6c757d; margin: 12px 0 0 0;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>{url}</p>
+        </div>"""
     return f"""
     <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #212529;">
-        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid {couleur};">
-            <h2 style="color: {couleur}; margin-top: 0;">{titre}</h2>
+    <body style="font-family: Arial, sans-serif; font-size: 18px; line-height: 1.5; max-width: 600px; margin: 0 auto; padding: 20px; color: #212529;">
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 6px solid {couleur};">
+            <h2 style="color: {couleur}; margin-top: 0; font-size: 26px;">{titre}</h2>
             {intro_html}
         </div>
         <div style="background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 10px; margin: 20px 0;">
-            <ul style="list-style: none; padding: 0; margin: 0; font-size: 16px;">{details}</ul>
+            <ul style="list-style: none; padding: 0; margin: 0; font-size: 19px;">{details}</ul>
         </div>
+        {bloc_bouton}
         <div style="background-color: #e9ecef; padding: 15px; border-radius: 10px; text-align: center; color: #495057;">
             {conclusion_html}
             <p style="margin: 10px 0 0 0;"><strong>L'équipe du Restaurant Le Bouche à Oreilles</strong><br>
@@ -296,14 +326,19 @@ def _gabarit(titre, couleur, intro_html, lignes, conclusion_html):
     """
 
 
+def _en_texte(valeur):
+    """Valeur HTML d'une ligne -> texte simple (version texte des emails)."""
+    return html.unescape(re.sub(r'<[^>]+>', '', re.sub(r'<br\s*/?>', ', ', valeur)))
+
+
 def _texte_dates(resas):
     return [date_fr(r['date']) for r in resas]
 
 
 def mail_client(type_mail, resas):
-    """Email au client pour une ou plusieurs reservations (meme client,
-    memes infos, dates differentes) : un seul email qui liste les dates.
-    type_mail : 'reception', 'confirmation' ou 'annulation'."""
+    """Email au client pour une ou plusieurs reservations du meme groupe :
+    un seul email qui liste les dates. type_mail : reception, confirmation,
+    annulation, modification ou lien_modification."""
     if not resas:
         return
     premiere = resas[0]
@@ -316,50 +351,64 @@ def mail_client(type_mail, resas):
     nom = html.escape(premiere['nom'])
     dates = _texte_dates(resas)
     plusieurs = len(dates) > 1
-    lignes = [
-        ('Date' + ('s' if plusieurs else ''), '<br>'.join(html.escape(d) for d in dates)),
-        ('Heure', html.escape(premiere['heure'])),
-        ('Nombre de personnes', str(premiere['personnes'])),
-        ('Référence', html.escape(reference)),
-    ]
+    lien = premiere.get('lien_modif') or ''
+    tel = html.escape(RESTAURANT_TEL)
+
+    if type_mail in ('modification', 'lien_modification'):
+        lignes = []
+        for r in resas:
+            etat = {'annulee': ' (annulée)', 'en_attente': ' (en attente de confirmation)'}.get(r['statut'], '')
+            lignes.append((date_fr(r['date']), f"{r['personnes']} personne{'s' if r['personnes'] > 1 else ''}{etat}"))
+        lignes.append(('Heure', html.escape(premiere['heure'])))
+    else:
+        lignes = [
+            ('Date' + ('s' if plusieurs else ''), '<br>'.join(html.escape(d) for d in dates)),
+            ('Heure', html.escape(premiere['heure'])),
+            ('Nombre de personnes', str(premiere['personnes'])),
+            ('Référence', html.escape(reference)),
+        ]
 
     if type_mail == 'confirmation':
         sujet = EMAIL_SUBJECT
         titre, couleur = 'Votre réservation est confirmée', '#28a745'
-        intro = (f"<p>Bonjour <strong>{nom}</strong>,</p>"
-                 f"<p>Votre table est réservée. Nous vous attendons avec plaisir.</p>")
-        conclusion = ("<p style=\"margin: 0;\">Un empêchement ? Merci de nous prévenir par téléphone "
-                      "ou en répondant simplement à cet email.</p>")
         texte_intro = "Votre table est réservée. Nous vous attendons avec plaisir."
+        conclusion = ("<p style=\"margin: 0;\">Un changement ou un empêchement ? Utilisez le bouton ci-dessus "
+                      f"ou appelez-nous au {tel}.</p>")
     elif type_mail == 'annulation':
         sujet = EMAIL_SUBJECT_ANNULATION
         titre, couleur = 'Votre réservation est annulée', '#dc3545'
-        intro = (f"<p>Bonjour <strong>{nom}</strong>,</p>"
-                 f"<p>Nous sommes au regret de vous informer que votre réservation a été annulée.</p>")
+        texte_intro = "Nous sommes au regret de vous informer que votre réservation a été annulée."
         conclusion = ("<p style=\"margin: 0;\">Pour toute question ou pour réserver une autre date, "
                       "appelez-nous ou répondez à cet email.</p>")
-        texte_intro = "Nous sommes au regret de vous informer que votre réservation a été annulée."
+    elif type_mail == 'modification':
+        sujet = 'Modification de votre réservation - Restaurant Le Bouche à Oreilles'
+        titre, couleur = 'Votre réservation est modifiée', '#cf7a3e'
+        texte_intro = "Votre changement est bien enregistré. Voici votre réservation à jour."
+        conclusion = f"<p style=\"margin: 0;\">Un autre changement ? Utilisez le bouton ci-dessus ou appelez-nous au {tel}.</p>"
+    elif type_mail == 'lien_modification':
+        sujet = 'Votre réservation - Restaurant Le Bouche à Oreilles'
+        titre, couleur = 'Vous avez déjà une réservation', '#cf7a3e'
+        texte_intro = ("Vous avez déjà une réservation chez nous. Pour changer le nombre de personnes "
+                       "ou annuler, cliquez sur le bouton « Modifier ou annuler ma réservation ».")
+        conclusion = f"<p style=\"margin: 0;\">Vous pouvez aussi nous appeler au {tel}.</p>"
     else:
         sujet = EMAIL_SUBJECT_RECEPTION
         titre, couleur = 'Nous avons bien reçu votre demande', '#17a2b8'
-        intro = (f"<p>Bonjour <strong>{nom}</strong>,</p>"
-                 f"<p>Votre demande est bien arrivée. <strong>Elle n'est pas encore confirmée</strong> : "
-                 f"vous recevrez un second email dès que notre équipe l'aura validée.</p>")
-        conclusion = ("<p style=\"margin: 0;\">Sans nouvelles de notre part 2 jours avant votre venue, "
-                      f"appelez-nous au {html.escape(RESTAURANT_TEL)}.</p>")
         texte_intro = ("Votre demande est bien arrivée. Elle n'est pas encore confirmée : "
                        "vous recevrez un second email dès que notre équipe l'aura validée.")
+        conclusion = ("<p style=\"margin: 0;\">Sans nouvelles de notre part 2 jours avant votre venue, "
+                      f"appelez-nous au {tel}.</p>")
+    texte_intro_html = html.escape(texte_intro).replace("Elle n&#x27;est pas encore confirmée", "<strong>Elle n'est pas encore confirmée</strong>")
+    intro = f"<p>Bonjour <strong>{nom}</strong>,</p><p>{texte_intro_html}</p>"
 
-    html_content = _gabarit(titre, couleur, intro, lignes, conclusion)
-    texte = "\n".join([
-        f"Bonjour {premiere['nom']},", "", texte_intro, "",
-        ("Dates : " if plusieurs else "Date : ") + ", ".join(dates),
-        f"Heure : {premiere['heure']}",
-        f"Nombre de personnes : {premiere['personnes']}",
-        f"Référence : {reference}", "",
-        "L'équipe du Restaurant Le Bouche à Oreilles",
-        f"Tél. {RESTAURANT_TEL}",
-    ])
+    bouton = (lien, 'Modifier ou annuler ma réservation') if lien and type_mail != 'annulation' else None
+    html_content = _gabarit(titre, couleur, intro, lignes, conclusion, bouton)
+    texte = "\n".join(
+        [f"Bonjour {premiere['nom']},", "", texte_intro, ""]
+        + [f"{libelle} : {_en_texte(valeur)}" for libelle, valeur in lignes]
+        + ([f"", f"Modifier ou annuler ma réservation : {lien}"] if bouton else [])
+        + ["", "L'équipe du Restaurant Le Bouche à Oreilles", f"Tél. {RESTAURANT_TEL}"]
+    )
 
     envoi_reel = TEST_EMAIL_REDIRECT or destinataire
     ok, canal, erreur = envoyer_email(envoi_reel, sujet, html_content, texte,
@@ -529,12 +578,21 @@ def verifier_dates(dates, fermes, aujourd_hui=None):
 # Routes publiques
 # ---------------------------------------------------------------------------
 
-@reservation_bp.route('/reserver')
-def reserver():
+def _formulaire(valeurs=None, messages=(), code=200):
+    """Affiche le formulaire. Apres une erreur, ce que le client a tape
+    reste affiche : il corrige au lieu de tout recommencer."""
+    for m in messages:
+        flash(m, 'error')
     return render_template('reservation_form.html',
                            confirmation_automatique=CONFIRMATION_AUTOMATIQUE,
                            telephone_resto=RESTAURANT_TEL,
-                           max_dates=MAX_DATES_PAR_DEMANDE)
+                           max_dates=MAX_DATES_PAR_DEMANDE,
+                           valeurs=valeurs or {}), code
+
+
+@reservation_bp.route('/reserver')
+def reserver():
+    return _formulaire()
 
 
 @reservation_bp.route('/api/occupation-dates')
@@ -625,14 +683,29 @@ def creer_reservation():
         erreurs.extend(verifier_dates(dates, jours_fermes()))
 
     if erreurs:
-        for e in erreurs:
-            flash(e, 'error')
-        return redirect(url_for('reservation.reserver'))
+        return _formulaire(request.form, erreurs, 400)
 
     # Limite par adresse IP (robots, doubles clics repetes...)
     if limite_atteinte(f'resa:{adresse_ip()}', MAX_DEMANDES_PAR_HEURE_ET_IP, 3600):
-        flash(f"Trop de demandes envoyées depuis votre connexion. Réessayez plus tard ou appelez-nous au {RESTAURANT_TEL}.", 'error')
-        return redirect(url_for('reservation.reserver'))
+        return _formulaire(request.form, [f"Trop de demandes envoyées depuis votre connexion. Réessayez plus tard ou appelez-nous au {RESTAURANT_TEL}."], 429)
+
+    # Deja une reservation ce jour-la (meme email ou meme telephone) ? On ne
+    # cree pas de doublon (ex. une table de 8 qui repasse pour 10) : on
+    # renvoie au client, a l'adresse deja connue, le lien pour la modifier.
+    doublons = reservations_existantes(email, telephone, dates)
+    if doublons:
+        deja = doublons[0]
+        groupe = (Reservation.query.filter_by(groupe_reference=deja.groupe_reference)
+                  .order_by(Reservation.date).all() if deja.groupe_reference else [deja])
+        if deja.email:
+            en_arriere_plan(mail_client, 'lien_modification',
+                            [donnees_reservation(r) for r in groupe if r.statut != 'annulee'])
+            flash(f"Vous avez déjà une réservation le {date_fr(deja.date)}. Pour changer le nombre de personnes, "
+                  "utilisez le bouton « Modifier ou annuler ma réservation » de votre email : nous venons de "
+                  f"vous le renvoyer. Vous pouvez aussi nous appeler au {RESTAURANT_TEL}.", 'error')
+        else:
+            flash(f"Vous avez déjà une réservation le {date_fr(deja.date)}. Pour la modifier, appelez-nous au {RESTAURANT_TEL}.", 'error')
+        return _formulaire(request.form, code=409)
 
     try:
         # Verifier qu'aucune date selectionnee n'est deja complete.
@@ -642,10 +715,10 @@ def creer_reservation():
         if dates_completes:
             liste = ', '.join(date_fr(d) for d in dates_completes)
             if len(dates_completes) == 1:
-                flash(f"Désolé, il ne reste plus assez de place le {liste}. Choisissez une autre date ou appelez-nous au {RESTAURANT_TEL}.", 'error')
+                message = f"Désolé, il ne reste plus assez de place le {liste}. Choisissez une autre date ou appelez-nous au {RESTAURANT_TEL}."
             else:
-                flash(f"Désolé, il ne reste plus assez de place à ces dates : {liste}. Choisissez d'autres dates ou appelez-nous au {RESTAURANT_TEL}.", 'error')
-            return redirect(url_for('reservation.reserver'))
+                message = f"Désolé, il ne reste plus assez de place à ces dates : {liste}. Choisissez d'autres dates ou appelez-nous au {RESTAURANT_TEL}."
+            return _formulaire(request.form, [message], 409)
 
         # Reference de groupe unique et non devinable (voir d783664).
         groupe_reference = nouvelle_reference_groupe()
@@ -676,7 +749,7 @@ def creer_reservation():
         # doit jamais bloquer la reponse. Chaque envoi est note dans le
         # journal des emails, visible dans l'admin.
         donnees = [donnees_reservation(r) for r in reservations_creees]
-        url_admin = url_for('afficher_toutes_reservations', _external=True)
+        url_admin = SITE_URL + url_for('afficher_toutes_reservations')
         en_arriere_plan(emails_nouvelle_demande, donnees, url_admin)
 
         session['derniere_reservation'] = groupe_reference
@@ -685,8 +758,7 @@ def creer_reservation():
     except Exception:
         db.session.rollback()
         traceback.print_exc()
-        flash(f"Une erreur est survenue, votre demande n'a pas été enregistrée. Réessayez ou appelez-nous au {RESTAURANT_TEL}.", 'error')
-        return redirect(url_for('reservation.reserver'))
+        return _formulaire(request.form, [f"Une erreur est survenue, votre demande n'a pas été enregistrée. Réessayez ou appelez-nous au {RESTAURANT_TEL}."], 500)
 
 
 @reservation_bp.route('/confirmation')
@@ -695,3 +767,135 @@ def confirmation():
     if not reference:
         return redirect(url_for('reservation.reserver'))
     return redirect(url_for('confirmation_groupe', groupe_reference=reference))
+
+
+# ---------------------------------------------------------------------------
+# Le client modifie ou annule lui-meme (lien personnel recu par email)
+# ---------------------------------------------------------------------------
+
+def _chiffres_tel(telephone):
+    """9 derniers chiffres : 0470 12 34 56 et +32 470 12 34 56 se valent."""
+    return re.sub(r'\D', '', telephone or '')[-9:]
+
+
+def reservations_existantes(email, telephone, dates):
+    """Reservations actives aux memes dates, avec le meme email ou le
+    meme telephone."""
+    from models import Reservation
+    tel = _chiffres_tel(telephone)
+    candidates = Reservation.query.filter(Reservation.date.in_(dates),
+                                          Reservation.statut.in_(['en_attente', 'confirmee'])).all()
+    return [r for r in candidates
+            if (email and (r.email or '').strip().lower() == email.strip().lower())
+            or (len(tel) >= 8 and _chiffres_tel(r.telephone) == tel)]
+
+
+def mail_restaurant_modification(avant, apres):
+    """Previent le restaurant quand un client modifie ou annule en ligne."""
+    if not apres or not RESTAURANT_EMAIL:
+        return
+    anciens = {r['id']: r for r in avant}
+    lignes = []
+    for r in apres:
+        a = anciens.get(r['id'])
+        if not a:
+            continue
+        if r['statut'] == 'annulee' and a['statut'] != 'annulee':
+            lignes.append((date_fr(r['date']), '<strong>annulée par le client</strong>'))
+        elif r['personnes'] != a['personnes']:
+            suite = ' (plus de 10 : à valider)' if r['statut'] == 'en_attente' and a['statut'] == 'confirmee' else ''
+            lignes.append((date_fr(r['date']), f"de {a['personnes']} à {r['personnes']} personnes{suite}"))
+    if not lignes:
+        return
+    premiere = apres[0]
+    lignes += [('Nom', html.escape(premiere['nom'])),
+               ('Téléphone', html.escape(premiere['telephone'] or '-')),
+               ('Email', html.escape(premiere['email'] or '-'))]
+    reference = premiere['groupe_reference'] or premiere['reference']
+    lien = f'<p style="margin: 0;"><a href="{html.escape(SITE_URL)}/admin/reservations">Ouvrir la liste des réservations</a></p>'
+    html_content = _gabarit('Réservation modifiée', '#cf7a3e',
+                            '<p>Un client vient de modifier sa réservation sur le site.</p>', lignes, lien)
+    texte = "\n".join(["Réservation modifiée par le client"] + [f"{l} : {_en_texte(v)}" for l, v in lignes])
+    ok, canal, erreur = envoyer_email(RESTAURANT_EMAIL, f"Réservation modifiée par le client : {premiere['nom']}",
+                                      html_content, texte, repondre_a=premiere['email'] or None)
+    _journaliser('notification_resto', RESTAURANT_EMAIL, reference, ok, canal, erreur)
+
+
+def emails_modification(avant, apres):
+    mail_client('modification', apres)
+    mail_restaurant_modification(avant, apres)
+
+
+def _modifiable(r, aujourd_hui):
+    """Modifiable en ligne jusqu'a la veille ; le jour meme, on telephone."""
+    return r.statut != 'annulee' and r.date > aujourd_hui
+
+
+@reservation_bp.route('/modifier/<jeton>', methods=['GET', 'POST'])
+def modifier(jeton):
+    from models import db, Reservation
+    try:
+        groupe_reference = URLSafeSerializer(current_app.secret_key, salt='modifier-reservation').loads(jeton)
+    except BadSignature:
+        groupe_reference = None
+    resas = (Reservation.query.filter_by(groupe_reference=groupe_reference).order_by(Reservation.date).all()
+             if groupe_reference else [])
+    if not resas:
+        return render_template('modifier_reservation_client.html', introuvable=True,
+                               telephone_resto=RESTAURANT_TEL), 404
+    aujourd_hui = date.today().isoformat()
+
+    if request.method == 'POST':
+        if limite_atteinte(f'modif:{adresse_ip()}', 20, 3600):
+            flash(f"Trop de tentatives. Réessayez plus tard ou appelez-nous au {RESTAURANT_TEL}.", 'error')
+            return redirect(url_for('reservation.modifier', jeton=jeton))
+        avant = [donnees_reservation(r) for r in resas]
+        erreurs, changements = [], 0
+        tout_annuler = request.form.get('annuler_tout') == '1'
+        for r in resas:
+            if not _modifiable(r, aujourd_hui):
+                continue
+            if tout_annuler or request.form.get(f'annuler_{r.id}') == '1':
+                r.statut = 'annulee'
+                changements += 1
+                continue
+            try:
+                nouveau = int(request.form.get(f'personnes_{r.id}', r.personnes))
+            except ValueError:
+                erreurs.append(f"{date_fr(r.date)} : le nombre de personnes n'est pas valide.")
+                continue
+            if nouveau == r.personnes:
+                continue
+            if not 1 <= nouveau <= GROUPE_MAX:
+                erreurs.append(f"{date_fr(r.date)} : de 1 à {GROUPE_MAX} personnes. Au-delà, appelez-nous au {RESTAURANT_TEL}.")
+                continue
+            if nouveau > r.personnes:
+                libres = max_personnes_pour_date(r.date) - places_occupees(r.date) + r.personnes
+                if nouveau > libres:
+                    erreurs.append(f"{date_fr(r.date)} : il ne reste pas assez de place (au maximum {max(libres, r.personnes)} "
+                                   f"personnes pour votre table). Appelez-nous au {RESTAURANT_TEL}, on verra ce qui est possible.")
+                    continue
+            if nouveau > MAX_PERSONNES_EN_LIGNE >= r.personnes:
+                r.statut = 'en_attente'   # devient un groupe : notre equipe valide
+            r.personnes = nouveau
+            changements += 1
+
+        if erreurs:
+            db.session.rollback()
+            for e in erreurs:
+                flash(e, 'error')
+            return redirect(url_for('reservation.modifier', jeton=jeton))
+        if not changements:
+            flash("Aucun changement à enregistrer.", 'info')
+            return redirect(url_for('reservation.modifier', jeton=jeton))
+        db.session.commit()
+        en_arriere_plan(emails_modification, avant, [donnees_reservation(r) for r in resas])
+        flash("C'est enregistré. Vous allez recevoir un email avec votre réservation à jour.", 'success')
+        return redirect(url_for('reservation.modifier', jeton=jeton))
+
+    modifiables = [r for r in resas if _modifiable(r, aujourd_hui)]
+    return render_template('modifier_reservation_client.html', introuvable=False, resas=resas,
+                           aujourd_hui=aujourd_hui, telephone_resto=RESTAURANT_TEL,
+                           nb_modifiables=len(modifiables),
+                           personnes_defaut=modifiables[0].personnes if modifiables else 2,
+                           max_en_ligne=MAX_PERSONNES_EN_LIGNE, groupe_max=GROUPE_MAX)
