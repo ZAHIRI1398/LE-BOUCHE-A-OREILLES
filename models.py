@@ -50,3 +50,29 @@ class Reservation(db.Model):
     message = db.Column(db.Text)
     statut = db.Column(db.String(20), default='en_attente')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # 'web' (formulaire du site) ou 'telephone' (saisie par l'equipe)
+    source = db.Column(db.String(20), default='web')
+
+class EmailEnvoi(db.Model):
+    """Journal des emails : chaque tentative d'envoi est notee ici, pour
+    que l'equipe voie dans l'admin si un client a bien recu son email
+    (et le rappelle par telephone si ce n'est pas le cas)."""
+    __tablename__ = 'email_envois'
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    type_mail = db.Column(db.String(30), nullable=False)   # reception, confirmation, annulation, notification_resto
+    destinataire = db.Column(db.String(120))
+    reference = db.Column(db.String(30), index=True)       # reference de la reservation ou du groupe
+    statut = db.Column(db.String(10), nullable=False)      # envoye / echec
+    canal = db.Column(db.String(20))                       # smtp, brevo, resend
+    erreur = db.Column(db.Text)
+
+class JourFerme(db.Model):
+    """Jours ou le restaurant ne prend pas de reservation (conges,
+    stages, journees pedagogiques...)."""
+    __tablename__ = 'jours_fermes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(10), unique=True, nullable=False)  # AAAA-MM-JJ
+    motif = db.Column(db.String(120))

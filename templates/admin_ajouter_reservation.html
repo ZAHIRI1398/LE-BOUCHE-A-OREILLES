@@ -1,0 +1,67 @@
+{% set titre_page = 'Ajouter une réservation' %}
+{% set page_active = 'ajouter' %}
+{% include '_admin_entete.html' %}
+            <h1 class="h3 mb-1"><i class="bi bi-telephone-plus me-2"></i>Réservation prise par téléphone</h1>
+            <p class="aide mb-4">Elle rejoint la même liste que les réservations du site et compte dans les places du jour.
+               L'email est facultatif : sans email, rien n'est envoyé au client.</p>
+
+            <form method="POST" action="{{ url_for('ajouter_reservation_admin') }}">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="nom" class="form-label">Nom</label>
+                        <input type="text" class="form-control" id="nom" name="nom" value="{{ valeurs.get('nom', '') }}" required autofocus>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="telephone" class="form-label">Téléphone</label>
+                        <input type="tel" class="form-control" id="telephone" name="telephone" value="{{ valeurs.get('telephone', '') }}">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="date" name="date" value="{{ valeurs.get('date', '') }}" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="personnes" class="form-label">Personnes</label>
+                        <input type="number" class="form-control" id="personnes" name="personnes" min="1" max="60" value="{{ valeurs.get('personnes', '2') }}" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="heure" class="form-label">Heure</label>
+                        <select class="form-select" id="heure" name="heure">
+                            {% for h in heures %}<option value="{{ h }}">{{ h }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="email" class="form-label">Email <span class="aide">(facultatif)</span></label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ valeurs.get('email', '') }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="statut" class="form-label">Statut</label>
+                        <select class="form-select" id="statut" name="statut">
+                            <option value="confirmee" {% if valeurs.get('statut', 'confirmee') == 'confirmee' %}selected{% endif %}>Confirmée</option>
+                            <option value="en_attente" {% if valeurs.get('statut') == 'en_attente' %}selected{% endif %}>En attente</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="message" class="form-label">Remarque <span class="aide">(allergie, occasion…)</span></label>
+                    <textarea class="form-control" id="message" name="message" rows="2">{{ valeurs.get('message', '') }}</textarea>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" value="1" id="envoyer_email" name="envoyer_email" {% if valeurs.get('envoyer_email') %}checked{% endif %}>
+                    <label class="form-check-label" for="envoyer_email">Envoyer l'email de confirmation au client (s'il a donné son adresse)</label>
+                </div>
+                <div class="form-check mb-4">
+                    <input class="form-check-input" type="checkbox" value="1" id="forcer" name="forcer" {% if valeurs.get('forcer') %}checked{% endif %}>
+                    <label class="form-check-label" for="forcer">Forcer même si le jour est complet ou noté fermé</label>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle me-1"></i> Enregistrer</button>
+                <a href="{{ url_for('afficher_toutes_reservations') }}" class="btn btn-link">Annuler</a>
+            </form>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

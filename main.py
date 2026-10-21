@@ -14,23 +14,15 @@ import pymupdf
 import hmac
 import secrets
 from datetime import timedelta
-import smtplib
-import threading
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 
 # Importation des modèles
-from models import db, Plat, Reservation, MenuDocument, MenuDocumentPage
+from models import db, Plat, Reservation, MenuDocument, MenuDocumentPage, EmailEnvoi, JourFerme
 
 # Importation du blueprint de réservation
-from reservation_client import (
-    reservation_bp,
-    envoyer_confirmation_email,
-    envoyer_annulation_email,
-)
 import reservation_client as rc
+from reservation_client import reservation_bp, en_arriere_plan, mail_client, donnees_reservation
 
 app = Flask(__name__)
 app.register_blueprint(reservation_bp, url_prefix='/reservation')
@@ -80,9 +72,14 @@ def migrer_colonnes_manquantes():
         if 'groupe_reference' not in colonnes:
             db.session.execute(db.text('ALTER TABLE reservations ADD COLUMN groupe_reference VARCHAR(20)'))
             db.session.commit()
+        if 'source' not in colonnes:
+            db.session.execute(db.text("ALTER TABLE reservations ADD COLUMN source VARCHAR(20) DEFAULT 'web'"))
+            db.session.commit()
         # Etendre la colonne reference a VARCHAR(30) pour le format Table1-2026-08-28
-        db.session.execute(db.text('ALTER TABLE reservations ALTER COLUMN reference TYPE VARCHAR(30)'))
-        db.session.commit()
+        # (PostgreSQL uniquement : SQLite, utilise en local, ne connait pas cette syntaxe)
+        if db.engine.dialect.name == 'postgresql':
+            db.session.execute(db.text('ALTER TABLE reservations ALTER COLUMN reference TYPE VARCHAR(30)'))
+            db.session.commit()
 
 def creer_tables():
     try:
@@ -148,6 +145,64 @@ def admin_logout():
     flash('Vous avez été déconnecté avec succès.', 'success')
     return redirect(url_for('accueil'))
 
+# ---------------------------------------------------------------------------
+# Suivi des emails dans l'admin
+# ---------------------------------------------------------------------------
+
+def etat_emails(reservations):
+    """Dernier email client (reception, confirmation ou annulation) connu
+    pour chaque reservation : {id: EmailEnvoi ou None}."""
+    refs = set()
+    for r in reservations:
+        refs.add(r.reference)
+        if r.groupe_reference:
+            refs.add(r.groupe_reference)
+    if not refs:
+        return {}
+    journaux = (EmailEnvoi.query
+                .filter(EmailEnvoi.reference.in_(refs),
+                        EmailEnvoi.type_mail.in_(rc.TYPES_MAIL_CLIENT))
+                .order_by(EmailEnvoi.created_at.asc(), EmailEnvoi.id.asc())
+                .all())
+    dernier = {}
+    for j in journaux:
+        dernier[j.reference] = j   # le plus recent remplace les precedents
+    etats = {}
+    for r in reservations:
+        candidats = [c for c in (dernier.get(r.reference), dernier.get(r.groupe_reference)) if c]
+        etats[r.id] = max(candidats, key=lambda c: (c.created_at, c.id)) if candidats else None
+    return etats
+
+
+def alertes_admin():
+    """Messages affiches en haut de la liste des reservations."""
+    alertes = []
+    if rc.TEST_EMAIL_REDIRECT:
+        alertes.append(('danger', "Mode test actif (variable TEST_EMAIL_REDIRECT) : tous les emails partent "
+                                  f"vers {rc.TEST_EMAIL_REDIRECT} et aucun client ne reçoit les siens."))
+    if not (rc.SMTP_USER and rc.SMTP_PASSWORD) and not rc.BREVO_API_KEY and not rc.RESEND_API_KEY:
+        alertes.append(('danger', "Aucun service d'envoi d'emails n'est configuré : les clients ne reçoivent aucun email."))
+
+    aujourd_hui = date.today().isoformat()
+    a_venir = Reservation.query.filter(Reservation.date >= aujourd_hui, Reservation.statut != 'annulee').all()
+    etats = etat_emails(a_venir)
+    echecs = [r for r in a_venir if etats.get(r.id) is not None and etats[r.id].statut == 'echec']
+    if echecs:
+        noms = ', '.join(f"{r.nom} ({r.telephone or 'pas de tél.'}, {rc.date_fr(r.date, False)})" for r in echecs[:8])
+        suite = '…' if len(echecs) > 8 else ''
+        alertes.append(('danger', f"{len(echecs)} client(s) n'ont pas reçu leur dernier email : {noms}{suite}. "
+                                  "Renvoyez-le (bouton ✉) ou appelez-les."))
+
+    limite = datetime.utcnow() - timedelta(hours=24)
+    en_retard = Reservation.query.filter(Reservation.statut == 'en_attente',
+                                         Reservation.created_at < limite,
+                                         Reservation.date >= aujourd_hui).count()
+    if en_retard:
+        alertes.append(('warning', f"{en_retard} demande(s) attendent une validation depuis plus de 24 h. "
+                                   "Tant qu'elles ne sont pas confirmées, les clients n'ont pas de confirmation."))
+    return alertes
+
+
 # Exemple de route protégée
 @app.route('/admin/reservations')
 @login_required
@@ -172,7 +227,9 @@ def afficher_toutes_reservations():
                              reservations=reservations,
                              email=None,
                              statut_actuel=statut,
-                             now=datetime.now())
+                             now=datetime.now(),
+                             etats=etat_emails(reservations),
+                             alertes=alertes_admin())
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
         app.logger.error(f"Type d'erreur: {type(e).__name__}")
@@ -339,16 +396,11 @@ def changer_statut(id):
 
         # Envoyer l'email au client uniquement après la décision de l'admin,
         # et seulement lorsque le statut change réellement. L'envoi se fait
-        # dans un thread pour ne pas bloquer la réponse si le service email
-        # est lent ou injoignable ; on copie les données car les objets
-        # SQLAlchemy expirent après commit dans un autre thread.
-        if nouveau_statut != ancien_statut:
-            donnees = (reservation.nom, reservation.email, reservation.date,
-                       reservation.heure, reservation.personnes, reservation.reference)
-            if nouveau_statut == 'confirmee':
-                threading.Thread(target=envoyer_confirmation_email, args=donnees, daemon=True).start()
-            elif nouveau_statut == 'annulee':
-                threading.Thread(target=envoyer_annulation_email, args=donnees, daemon=True).start()
+        # en arrière-plan et il est noté dans le journal des emails (colonne
+        # « Email » de la liste) : un échec n'est plus silencieux.
+        if nouveau_statut != ancien_statut and nouveau_statut in ('confirmee', 'annulee'):
+            type_mail = 'confirmation' if nouveau_statut == 'confirmee' else 'annulation'
+            en_arriere_plan(mail_client, type_mail, [donnees_reservation(reservation)])
 
         flash(f'Le statut de la réservation a été mis à jour avec succès.', 'success')
     except Exception as e:
@@ -713,15 +765,11 @@ def modifier_reservation(id):
             db.session.commit()
 
             # Notifier le client uniquement lorsque l'admin fait passer
-            # la réservation à "confirmee" ou "annulee". Envoi dans un
-            # thread pour ne pas bloquer la réponse (même raison que ci-dessus).
-            if reservation.statut != ancien_statut:
-                donnees = (reservation.nom, reservation.email, reservation.date,
-                           reservation.heure, reservation.personnes, reservation.reference)
-                if reservation.statut == 'confirmee':
-                    threading.Thread(target=envoyer_confirmation_email, args=donnees, daemon=True).start()
-                elif reservation.statut == 'annulee':
-                    threading.Thread(target=envoyer_annulation_email, args=donnees, daemon=True).start()
+            # la réservation à "confirmee" ou "annulee" (envoi en
+            # arrière-plan, noté dans le journal des emails).
+            if reservation.statut != ancien_statut and reservation.statut in ('confirmee', 'annulee'):
+                type_mail = 'confirmation' if reservation.statut == 'confirmee' else 'annulation'
+                en_arriere_plan(mail_client, type_mail, [donnees_reservation(reservation)])
 
             flash('La réservation a été mise à jour avec succès.', 'success')
             return redirect(url_for('afficher_toutes_reservations'))
@@ -741,7 +789,7 @@ def confirmation_groupe(groupe_reference):
     # par l'admin) : les anciennes references de groupe etaient
     # sequentielles, donc faciles a deviner (noms des clients visibles).
     if session.get('derniere_reservation') != groupe_reference and not session.get('admin_logged_in'):
-        flash("Cette page n'est plus disponible. Pour toute question sur votre réservation, appelez-nous au 0471 24 32 79.", 'info')
+        flash(f"Cette page n'est plus disponible. Pour toute question sur votre réservation, appelez-nous au {rc.RESTAURANT_TEL}.", 'info')
         return redirect(url_for('page_accueil'))
     try:
         reservations = Reservation.query.filter_by(groupe_reference=groupe_reference).order_by(Reservation.date).all()
@@ -758,13 +806,175 @@ def confirmation_groupe(groupe_reference):
                 app.logger.error(f"Erreur de formatage de date: {e}")
                 reservation.date_formatted = reservation.date
 
-        return render_template('confirmation_groupe.html', reservations=reservations, premiere=reservations[0])
+        toutes_confirmees = all(r.statut == 'confirmee' for r in reservations)
+        return render_template('confirmation_groupe.html', reservations=reservations, premiere=reservations[0],
+                               toutes_confirmees=toutes_confirmees, telephone_resto=rc.RESTAURANT_TEL)
 
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération de la réservation: {str(e)}")
         flash('Une erreur est survenue lors de la récupération de votre réservation.', 'error')
         return redirect(url_for('accueil'))
-   
+
+
+# ---------------------------------------------------------------------------
+# Admin : renvoyer un email, saisir une réservation prise par téléphone,
+# gérer les jours de fermeture
+# ---------------------------------------------------------------------------
+
+@app.route('/admin/reservation/<int:id>/renvoyer', methods=['POST'])
+@login_required
+def renvoyer_email(id):
+    reservation = Reservation.query.get_or_404(id)
+    if not reservation.email:
+        flash("Pas d'adresse email pour ce client : appelez-le.", 'warning')
+    elif reservation.statut == 'en_attente':
+        flash("Cette réservation est encore en attente : confirmez-la (✓) pour envoyer la confirmation.", 'warning')
+    else:
+        type_mail = 'confirmation' if reservation.statut == 'confirmee' else 'annulation'
+        en_arriere_plan(mail_client, type_mail, [donnees_reservation(reservation)])
+        flash(f"Email de {type_mail} renvoyé à {reservation.email}. Le résultat s'affiche dans la colonne « Email ».", 'success')
+    return redirect(url_for('afficher_toutes_reservations'))
+
+
+@app.route('/admin/reservations/ajouter', methods=['GET', 'POST'])
+@login_required
+def ajouter_reservation_admin():
+    """Saisie d'une réservation prise par téléphone (ou au comptoir) :
+    elle entre dans la même liste et compte dans les places du jour."""
+    valeurs = request.form if request.method == 'POST' else request.args   # ?date=AAAA-MM-JJ pre-remplit la date
+    if request.method == 'POST':
+        nom = request.form.get('nom', '').strip()
+        telephone = request.form.get('telephone', '').strip()
+        email = request.form.get('email', '').strip()
+        jour = request.form.get('date', '').strip()
+        message = request.form.get('message', '').strip()
+        statut = request.form.get('statut', 'confirmee')
+        forcer = request.form.get('forcer') == '1'
+        envoyer = request.form.get('envoyer_email') == '1'
+        try:
+            personnes = int(request.form.get('personnes', ''))
+        except ValueError:
+            personnes = 0
+
+        erreurs = []
+        if not nom:
+            erreurs.append('Le nom est obligatoire.')
+        if email and not rc.EMAIL_RE.match(email):
+            erreurs.append("L'adresse email ne semble pas correcte.")
+        if not 1 <= personnes <= rc.GROUPE_MAX:
+            erreurs.append(f'Nombre de personnes : de 1 à {rc.GROUPE_MAX}.')
+        if statut not in ('confirmee', 'en_attente'):
+            statut = 'confirmee'
+        try:
+            jour_obj = datetime.strptime(jour, '%Y-%m-%d').date()
+            if jour_obj.weekday() >= 5:
+                erreurs.append('Le restaurant est fermé le week-end.')
+        except ValueError:
+            erreurs.append('La date est obligatoire.')
+            jour_obj = None
+
+        if not erreurs and jour_obj:
+            fermes = rc.jours_fermes()
+            occupees = rc.places_occupees(jour)
+            maximum = rc.max_personnes_pour_date(jour)
+            if jour in fermes and not forcer:
+                erreurs.append(f"Ce jour est noté comme fermé ({fermes[jour]}). Cochez « Forcer » pour l'enregistrer quand même.")
+            elif occupees + personnes > maximum and not forcer:
+                erreurs.append(f"Plus assez de place ce jour-là ({occupees}/{maximum} déjà inscrits). "
+                               "Cochez « Forcer » pour l'enregistrer quand même.")
+
+        if erreurs:
+            for e in erreurs:
+                flash(e, 'danger')
+            return render_template('admin_ajouter_reservation.html', valeurs=valeurs,
+                                   heures=rc.HEURES_SERVICE)
+
+        reservation = Reservation(
+            reference=rc.prochaine_reference(jour),
+            groupe_reference=rc.nouvelle_reference_groupe(),
+            nom=nom, email=email, telephone=telephone, date=jour,
+            heure=request.form.get('heure') if request.form.get('heure') in rc.HEURES_SERVICE else rc.HEURES_SERVICE[0],
+            personnes=personnes, message=message, statut=statut, source='telephone',
+        )
+        db.session.add(reservation)
+        db.session.commit()
+        if envoyer and email and statut == 'confirmee':
+            en_arriere_plan(mail_client, 'confirmation', [donnees_reservation(reservation)])
+        flash(f"Réservation enregistrée : {nom}, {personnes} pers., {rc.date_fr(jour)}.", 'success')
+        return redirect(url_for('afficher_toutes_reservations'))
+
+    return render_template('admin_ajouter_reservation.html', valeurs=valeurs, heures=rc.HEURES_SERVICE)
+
+
+@app.route('/admin/fermetures', methods=['GET', 'POST'])
+@login_required
+def admin_fermetures():
+    """Jours sans service : ils sont grisés dans le calendrier du site."""
+    if request.method == 'POST':
+        debut = request.form.get('debut', '').strip()
+        fin = request.form.get('fin', '').strip() or debut
+        motif = request.form.get('motif', '').strip()[:120] or 'Fermé'
+        try:
+            d1 = datetime.strptime(debut, '%Y-%m-%d').date()
+            d2 = datetime.strptime(fin, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Indiquez au moins une date de début.', 'danger')
+            return redirect(url_for('admin_fermetures'))
+        if d2 < d1:
+            d1, d2 = d2, d1
+        if (d2 - d1).days > 120:
+            flash('Période trop longue (120 jours maximum à la fois).', 'danger')
+            return redirect(url_for('admin_fermetures'))
+        deja = {j.date for j in JourFerme.query.all()}
+        ajoutes, jour = 0, d1
+        while jour <= d2:
+            iso = jour.isoformat()
+            if jour.weekday() < 5 and iso not in deja:
+                db.session.add(JourFerme(date=iso, motif=motif))
+                ajoutes += 1
+            jour += timedelta(days=1)
+        db.session.commit()
+        flash(f'{ajoutes} jour(s) de fermeture ajouté(s).', 'success')
+        return redirect(url_for('admin_fermetures'))
+
+    aujourd_hui = date.today().isoformat()
+    jours = JourFerme.query.filter(JourFerme.date >= aujourd_hui).order_by(JourFerme.date).all()
+    # Reservations deja prises sur un jour ferme : a prevenir
+    conflits = {}
+    if jours:
+        for r in Reservation.query.filter(Reservation.date.in_([j.date for j in jours]),
+                                          Reservation.statut != 'annulee').all():
+            conflits.setdefault(r.date, []).append(r)
+    return render_template('admin_fermetures.html', jours=jours, conflits=conflits, date_fr=rc.date_fr)
+
+
+@app.route('/admin/fermetures/<int:id>/supprimer', methods=['POST'])
+@login_required
+def supprimer_fermeture(id):
+    jour = JourFerme.query.get_or_404(id)
+    db.session.delete(jour)
+    db.session.commit()
+    flash(f'Le {rc.date_fr(jour.date)} est de nouveau ouvert aux réservations.', 'success')
+    return redirect(url_for('admin_fermetures'))
+
+
+@app.context_processor
+def outils_templates():
+    return {'date_fr': rc.date_fr}
+
+
+@app.template_filter('heure_locale')
+def heure_locale(dt, fmt='%d/%m à %H:%M'):
+    """Les heures sont enregistrees en UTC : affichage a l'heure belge."""
+    if not dt:
+        return ''
+    try:
+        from datetime import timezone
+        from zoneinfo import ZoneInfo
+        return dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Europe/Brussels')).strftime(fmt)
+    except Exception:
+        return dt.strftime(fmt) + ' (UTC)'
+
 
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0',port=5000)

@@ -52,6 +52,12 @@
                         <a class="nav-link active" href="{{ url_for('reservations_par_date') }}">Par date</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('ajouter_reservation_admin') }}"><i class="bi bi-telephone-plus"></i> Ajouter (téléphone)</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_fermetures') }}"><i class="bi bi-calendar-x"></i> Jours fermés</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('admin_menu') }}">Menu</a>
                     </li>
                 </ul>
@@ -93,7 +99,9 @@
                 {% for jour in resume %}
                 <div class="date-card">
                     <div class="date-header">
-                        <h3><i class="bi bi-calendar-week me-2"></i>{{ jour.date }}</h3>
+                        <h3><i class="bi bi-calendar-week me-2"></i>{{ date_fr(jour.date) }}
+                            <a href="{{ url_for('ajouter_reservation_admin', date=jour.date) }}" class="btn btn-sm btn-outline-light ms-2 no-print" title="Ajouter une réservation prise par téléphone pour ce jour"><i class="bi bi-telephone-plus"></i></a>
+                        </h3>
                         <div class="date-stats">
                             <span class="stat-badge"><i class="bi bi-table"></i> {{ jour.nb_tables }} table(s)</span>
                             <span class="stat-badge"><i class="bi bi-people"></i> {{ jour.nb_personnes }} personne(s)</span>
@@ -118,8 +126,8 @@
                                 {% for r in jour.reservations %}
                                 <tr>
                                     <td><small class="text-muted">{{ r.reference }}</small></td>
-                                    <td>{{ r.nom }}</td>
-                                    <td>{{ r.email }}</td>
+                                    <td>{% if r.source == 'telephone' %}<i class="bi bi-telephone text-primary" title="Prise par téléphone"></i> {% endif %}{{ r.nom }}{% if r.message %}<br><small class="text-muted">{{ r.message }}</small>{% endif %}</td>
+                                    <td>{{ r.email or '-' }}</td>
                                     <td>{{ r.telephone or '-' }}</td>
                                     <td>{{ r.heure }}</td>
                                     <td>{{ r.personnes }}</td>

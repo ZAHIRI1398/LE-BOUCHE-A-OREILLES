@@ -147,6 +147,12 @@
                         <a class="nav-link" href="{{ url_for('reservations_par_date') }}">Par date</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('ajouter_reservation_admin') }}"><i class="bi bi-telephone-plus"></i> Ajouter (téléphone)</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_fermetures') }}"><i class="bi bi-calendar-x"></i> Jours fermés</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('admin_menu') }}">Menu</a>
                     </li>
                 </ul>
@@ -199,6 +205,12 @@
                 {% endif %}
             {% endwith %}
 
+            {% for niveau, texte in alertes %}
+                <div class="alert alert-{{ niveau }} no-print" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> {{ texte }}
+                </div>
+            {% endfor %}
+
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
                     <thead class="table-dark">
@@ -211,7 +223,7 @@
                             <th>Date</th>
                             <th>Heure</th>
                             <th>Personnes</th>
-                            <th>Statut</th>
+                            <th>Statut / email</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -221,14 +233,14 @@
                             <td class="no-print"><input type="checkbox" class="reservation-checkbox" value="{{ reservation.id }}"></td>
                             <td>{{ reservation.id }}</td>
                             <td>
-                                {{ reservation.nom }}
+                                {% if reservation.source == 'telephone' %}<i class="bi bi-telephone text-primary" title="Réservation prise par téléphone"></i> {% endif %}{{ reservation.nom }}
                                 {% if reservation.groupe_reference %}
                                 <br><span class="text-muted small" title="Réservation multi-dates">{{ reservation.groupe_reference }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ reservation.email }}</td>
+                            <td>{{ reservation.email or '-' }}</td>
                             <td>{{ reservation.telephone or '-' }}</td>
-                            <td>{{ reservation.date }}</td>
+                            <td class="text-nowrap">{{ date_fr(reservation.date) }}</td>
                             <td>{{ reservation.heure }}</td>
                             <td>{{ reservation.personnes }}</td>
                             <td>
@@ -238,6 +250,21 @@
                                     <span class="badge bg-danger">Annulée</span>
                                 {% else %}
                                     <span class="badge bg-warning">En attente</span>
+                                {% endif %}
+                                <br>
+                                {% set envoi = etats.get(reservation.id) %}
+                                {% if not reservation.email %}
+                                    <span class="text-muted small" title="Pas d'adresse email">pas d'email</span>
+                                {% elif envoi is none %}
+                                    <span class="text-muted small" title="Aucun email noté (réservation antérieure au suivi des emails)">email : ?</span>
+                                {% elif envoi.statut == 'envoye' %}
+                                    <span class="badge bg-light text-success border" title="Parti le {{ envoi.created_at|heure_locale }} via {{ envoi.canal }} vers {{ envoi.destinataire }}">
+                                        <i class="bi bi-envelope-check"></i> {{ envoi.type_mail }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger" title="Échec le {{ envoi.created_at|heure_locale }} : {{ envoi.erreur }}">
+                                        <i class="bi bi-envelope-x"></i> {{ envoi.type_mail }} non parti
+                                    </span>
                                 {% endif %}
                             </td>
                             <td class="d-flex col-actions">
@@ -258,6 +285,13 @@
                                     <button type="submit" class="btn btn-sm btn-warning" title="Annuler" 
                                         onclick="return confirm('Êtes-vous sûr de vouloir annuler cette réservation ?');">
                                         <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                {% if reservation.email and reservation.statut in ('confirmee', 'annulee') %}
+                                <form action="{{ url_for('renvoyer_email', id=reservation.id) }}" method="POST" class="me-1">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Renvoyer l'email de {{ 'confirmation' if reservation.statut == 'confirmee' else 'annulation' }}">
+                                        <i class="bi bi-envelope"></i>
                                     </button>
                                 </form>
                                 {% endif %}

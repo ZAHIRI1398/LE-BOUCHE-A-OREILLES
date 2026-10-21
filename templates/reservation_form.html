@@ -40,6 +40,9 @@
     .calendrier-case.complete { color: #fff; cursor: not-allowed; background: #e74c3c; position: relative; }
     .calendrier-case.complete::after { content: '✕'; position: absolute; font-size: .7rem; }
     .calendrier-case.selectionnee { background: #cf7a3e; color: #fff; font-weight: 700; }
+    .calendrier-case.ferme { color: #adb5bd; cursor: not-allowed; background: repeating-linear-gradient(45deg, #f8f9fa, #f8f9fa 4px, #eef0f2 4px, #eef0f2 8px); }
+    /* Champ piège pour les robots : invisible pour les visiteurs */
+    .champ-piege { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
     .dates-choisies {
         display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; min-height: 2.5rem;
     }
@@ -108,7 +111,12 @@
                     <div class="step-num">5</div>
                     <div class="step-text">
                         <strong>Cliquez sur « Réserver maintenant »</strong><br>
-                        <small>Vous recevrez un email de <strong>réception de votre demande</strong>. Notre équipe validera ensuite votre réservation et vous enverra une <strong>confirmation</strong> par email.</small>
+                        {% if confirmation_automatique %}
+                        <small>S'il reste de la place, votre table est <strong>réservée tout de suite</strong> et vous recevez la <strong>confirmation</strong> par email (pour plus de 10 personnes, notre équipe vous recontacte).</small>
+                        {% else %}
+                        <small>Vous recevrez d'abord un email de <strong>réception de votre demande</strong> (ce n'est pas encore une confirmation). Notre équipe valide ensuite votre réservation et vous envoie la <strong>confirmation</strong> par email.</small>
+                        {% endif %}
+                        <br><small>Pas d'email ? Regardez dans le dossier « courrier indésirable » ou appelez-nous au <strong>{{ telephone_resto }}</strong>. Vous pouvez aussi réserver par téléphone.</small>
                     </div>
                 </div>
             </div>
@@ -118,6 +126,10 @@
                 </div>
                 <div class="card-body p-4">
                     <form method="POST" action="{{ url_for('reservation.creer_reservation') }}" id="form-reservation">
+                        <div class="champ-piege" aria-hidden="true">
+                            <label for="site_web">Ne pas remplir ce champ</label>
+                            <input type="text" id="site_web" name="site_web" tabindex="-1" autocomplete="off">
+                        </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="nom" class="form-label">Nom complet</label>
@@ -148,6 +160,11 @@
                                     <option value="10">10 personnes</option>
                                     <option value="0">Plus de 10 personnes</option>
                                 </select>
+                                <div id="bloc-groupe" class="mt-2" style="display: none;">
+                                    <label for="personnes_groupe" class="form-label small mb-1">Nombre exact de personnes</label>
+                                    <input type="number" class="form-control" id="personnes_groupe" name="personnes_groupe" min="11" max="60" inputmode="numeric">
+                                    <small class="text-muted">Pour un groupe, notre équipe vous recontacte avant de confirmer.</small>
+                                </div>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="heure" class="form-label">Heure</label>
@@ -160,7 +177,7 @@
                         <div class="mb-3">
                             <label class="form-label">
                                 Dates souhaitées
-                                <span class="text-muted small">(sélectionnez autant de dates que vous le souhaitez)</span>
+                                <span class="text-muted small">(jusqu'à {{ max_dates }} dates par demande)</span>
                             </label>
                             <div class="calendrier-multi">
                                 <div class="calendrier-entete">
@@ -210,6 +227,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Occupation des dates : { "2026-09-10": 20, ... }
     // Les dates ayant atteint le maximum ne sont pas cliquables.
     let occupationDates = {};
+    // Jours sans service (congés, stages...) : { "2026-12-21": "Congés d'hiver" }
+    let joursFermes = {};
+    const MAX_DATES = {{ max_dates }};
     let maxPersonnes = 26;
     let maxPersonnesMardi = 30;
     // Nouvelles capacites a partir de novembre 2026
@@ -313,6 +333,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (estWeekend || estPasse) {
                 el.className = 'calendrier-case indisponible';
+            } else if (joursFermes[iso]) {
+                el.className = 'calendrier-case ferme';
+                el.title = 'Fermé : ' + joursFermes[iso];
             } else if (estComplete) {
                 el.className = 'calendrier-case complete';
                 el.title = 'Complet (' + totalPersonnes + '/' + maxPourDate + ' personnes)';
@@ -324,6 +347,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 el.addEventListener('click', function () {
                     if (datesSelectionnees.has(iso)) {
                         datesSelectionnees.delete(iso);
+                    } else if (datesSelectionnees.size >= MAX_DATES) {
+                        alert('Vous pouvez choisir au maximum ' + MAX_DATES + ' dates par demande.');
+                        return;
                     } else {
                         datesSelectionnees.add(iso);
                     }
@@ -344,11 +370,34 @@ document.addEventListener('DOMContentLoaded', function () {
         dessinerCalendrier();
     });
 
+    // « Plus de 10 personnes » : on demande le nombre exact
+    const selectPersonnes = document.getElementById('personnes');
+    const blocGroupe = document.getElementById('bloc-groupe');
+    const champGroupe = document.getElementById('personnes_groupe');
+    function majGroupe() {
+        const groupe = selectPersonnes.value === '0';
+        blocGroupe.style.display = groupe ? 'block' : 'none';
+        champGroupe.required = groupe;
+    }
+    selectPersonnes.addEventListener('change', majGroupe);
+    majGroupe();
+
     document.getElementById('form-reservation').addEventListener('submit', function (e) {
         if (datesSelectionnees.size === 0) {
             e.preventDefault();
             alert('Merci de sélectionner au moins une date dans le calendrier.');
+            return;
         }
+        // Evite les doubles envois (double clic)
+        const bouton = this.querySelector('button[type="submit"]');
+        bouton.disabled = true;
+        bouton.innerHTML = 'Envoi en cours…';
+    });
+    // Retour arriere du navigateur : on reactive le bouton
+    window.addEventListener('pageshow', function () {
+        const bouton = document.querySelector('#form-reservation button[type="submit"]');
+        bouton.disabled = false;
+        bouton.innerHTML = '<i class="fas fa-calendar-check me-2"></i>Réserver maintenant';
     });
 
     dessinerCalendrier();
@@ -361,6 +410,10 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
             if (data.occupation) {
                 occupationDates = data.occupation;
+                joursFermes = data.fermes || {};
+                // Une date deja choisie qui s'avere fermee est retiree
+                Object.keys(joursFermes).forEach(iso => datesSelectionnees.delete(iso));
+                majResume();
                 maxPersonnes = data.max_personnes || 26;
                 maxPersonnesMardi = data.max_personnes_mardi || 30;
                 novDebut = data.nov_debut || '2026-11-01';

@@ -9,15 +9,27 @@
             <div class="card shadow text-center">
                 <div class="card-body p-5">
                     <div class="mb-4">
+                        {% if toutes_confirmees %}
+                        <div class="icon-success mb-3">
+                            <i class="fas fa-check-circle fa-5x text-success"></i>
+                        </div>
+                        <h1 class="h3 mb-3">Votre table est réservée</h1>
+                        <p class="lead">
+                            Merci, {{ premiere.nom }} ! Nous vous attendons
+                            {{ 'aux dates' if reservations|length > 1 else 'à la date' }} ci-dessous.
+                            Une confirmation vous est envoyée par email.
+                        </p>
+                        {% else %}
                         <div class="icon-success mb-3">
                             <i class="fas fa-hourglass-half fa-5x text-warning"></i>
                         </div>
-                        <h1 class="h3 mb-3">Réservation en attente de confirmation</h1>
+                        <h1 class="h3 mb-3">Demande reçue, en attente de confirmation</h1>
                         <p class="lead">
                             Merci, {{ premiere.nom }} ! Votre demande a bien été enregistrée pour
                             {{ reservations|length }} date{{ 's' if reservations|length > 1 else '' }}.
-                            Notre équipe va l'examiner et vous recevrez un email dès que chaque date sera confirmée.
+                            <strong>Elle n'est pas encore confirmée</strong> : vous recevrez un email dès que notre équipe l'aura validée.
                         </p>
+                        {% endif %}
                     </div>
 
                     <div class="card border-0 bg-light mb-4">
@@ -48,9 +60,12 @@
                     <div class="alert alert-info">
                         <h3 class="h5 mb-3">Informations importantes</h3>
                         <ul class="text-start">
-                            <li>Votre réservation n'est pas encore définitive : chaque date doit être validée par notre équipe</li>
-                            <li>Vous recevrez un email par date confirmée (ou, le cas échéant, annulée)</li>
-                            <li>Pour toute question, contactez-nous au 0471/24.32.79</li>
+                            {% if not toutes_confirmees %}
+                            <li>Votre réservation n'est pas encore définitive : chaque date doit être validée par notre équipe.</li>
+                            <li>Vous recevrez un email de confirmation (ou, le cas échéant, d'annulation).</li>
+                            {% endif %}
+                            <li>Pas d'email ? Regardez dans le dossier « courrier indésirable » (spam).</li>
+                            <li>Pour toute question ou un empêchement, appelez-nous au {{ telephone_resto }}.</li>
                         </ul>
                     </div>
 
@@ -58,7 +73,7 @@
                         <a href="{{ url_for('accueil') }}" class="btn btn-primary me-2">
                             <i class="fas fa-home me-2"></i>Retour à l'accueil
                         </a>
-                        <a href="#" class="btn btn-outline-secondary">
+                        <a href="#" class="btn btn-outline-secondary" onclick="window.print(); return false;">
                             <i class="fas fa-print me-2"></i>Imprimer
                         </a>
                     </div>
