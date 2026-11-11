@@ -51,7 +51,7 @@
                 </div>
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" value="1" id="envoyer_email" name="envoyer_email" {% if valeurs.get('envoyer_email') %}checked{% endif %}>
-                    <label class="form-check-label" for="envoyer_email">Envoyer l'email de confirmation au client (s'il a donné son adresse)</label>
+                    <label class="form-check-label" for="envoyer_email">Envoyer la confirmation au client{% if sms_actif %} (par email s'il a donné son adresse, par SMS s'il a donné un numéro de GSM){% else %} (email, s'il a donné son adresse){% endif %}</label>
                 </div>
                 <div class="form-check mb-4">
                     <input class="form-check-input" type="checkbox" value="1" id="forcer" name="forcer" {% if valeurs.get('forcer') %}checked{% endif %}>

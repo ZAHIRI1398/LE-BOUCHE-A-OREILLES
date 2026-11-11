@@ -27,6 +27,7 @@
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('reservations_par_date') }}">Par date</a></li>
                     <li class="nav-item"><a class="nav-link {% if page_active == 'ajouter' %}active{% endif %}" href="{{ url_for('ajouter_reservation_admin') }}"><i class="bi bi-telephone-plus"></i> Ajouter (téléphone)</a></li>
                     <li class="nav-item"><a class="nav-link {% if page_active == 'fermetures' %}active{% endif %}" href="{{ url_for('admin_fermetures') }}"><i class="bi bi-calendar-x"></i> Jours fermés</a></li>
+                    <li class="nav-item"><a class="nav-link {% if page_active == 'places' %}active{% endif %}" href="{{ url_for('admin_places') }}"><i class="bi bi-people"></i> Places</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_menu') }}">Menu</a></li>
                 </ul>
                 <div class="d-flex">

@@ -105,11 +105,18 @@
                 <p class="appel-direct">Vous préférez téléphoner ?
                     <a href="tel:{{ tel_lien }}" class="btn btn-outline-primary btn-lg ms-1"><i class="fas fa-phone me-2"></i>{{ telephone_resto }}</a>
                 </p>
+                <p class="appel-direct">Vous avez déjà réservé et vous voulez changer ou annuler ?
+                    <a href="{{ url_for('reservation.retrouver') }}" class="btn btn-outline-primary btn-lg ms-1"><i class="fas fa-pen me-2"></i>Modifier ou annuler</a>
+                </p>
                 <div class="step-item">
                     <div class="step-num">1</div>
                     <div class="step-text">
                         <strong>Remplissez vos coordonnées</strong><br>
+                        {% if sms_actif %}
+                        <small>Indiquez votre nom et votre numéro de téléphone. L'adresse email n'est pas obligatoire si vous donnez un numéro de GSM.</small>
+                        {% else %}
                         <small>Indiquez votre nom, votre email et votre numéro de téléphone.</small>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="step-item">
@@ -138,9 +145,9 @@
                     <div class="step-text">
                         <strong>Cliquez sur « Réserver maintenant »</strong><br>
                         {% if confirmation_automatique %}
-                        <small>S'il reste de la place, votre table est <strong>réservée tout de suite</strong> et vous recevez la <strong>confirmation</strong> par email (pour plus de 10 personnes, notre équipe vous recontacte).</small>
+                        <small>S'il reste de la place, votre table est <strong>réservée tout de suite</strong> et vous recevez la <strong>confirmation</strong> par email{% if sms_actif %}, ou par SMS si vous cochez la case sous votre numéro de GSM{% endif %} (pour plus de 10 personnes, notre équipe vous recontacte).</small>
                         {% else %}
-                        <small>Vous recevrez d'abord un email de <strong>réception de votre demande</strong> (ce n'est pas encore une confirmation). Notre équipe valide ensuite votre réservation et vous envoie la <strong>confirmation</strong> par email.</small>
+                        <small>Vous recevrez d'abord{% if sms_actif %}, si vous avez donné votre adresse,{% endif %} un email de <strong>réception de votre demande</strong> (ce n'est pas encore une confirmation). Notre équipe valide ensuite votre réservation et vous envoie la <strong>confirmation</strong> par email{% if sms_actif %}, ou par SMS si vous cochez la case sous votre numéro de GSM{% endif %}.</small>
                         {% endif %}
                         <br><small>Un changement ensuite (nombre de personnes, annulation) ? Utilisez le bouton « Modifier ou annuler ma réservation » de votre email : inutile de refaire une réservation.</small>
                         <br><small>Pas d'email ? Regardez dans le dossier « courrier indésirable » ou appelez-nous au <strong>{{ telephone_resto }}</strong>. Vous pouvez aussi réserver par téléphone.</small>
@@ -163,14 +170,20 @@
                                 <input type="text" class="form-control" id="nom" name="nom" value="{{ valeurs.get('nom', '') }}" autocomplete="name" placeholder="ex. Marie Dupont" required>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" value="{{ valeurs.get('email', '') }}" autocomplete="email" placeholder="ex. marie.dupont@exemple.be" required>
+                                <label for="email" class="form-label">Email{% if sms_actif %} <span class="text-muted fw-normal">(facultatif si vous avez un GSM)</span>{% endif %}</label>
+                                <input type="email" class="form-control" id="email" name="email" value="{{ valeurs.get('email', '') }}" autocomplete="email" placeholder="ex. marie.dupont@exemple.be" {% if not sms_actif %}required{% endif %}>
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="telephone" class="form-label">Téléphone</label>
                                 <input type="tel" class="form-control" id="telephone" name="telephone" value="{{ valeurs.get('telephone', '') }}" autocomplete="tel" placeholder="ex. 0470 12 34 56" required>
+                                {% if sms_actif %}
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" value="1" id="sms" name="sms" style="width: 1.5em; height: 1.5em;" {% if valeurs.get('sms') %}checked{% endif %}>
+                                    <label class="form-check-label ms-2" for="sms" style="font-size: 1.05rem;">Envoyez-moi ma confirmation <strong>par SMS</strong> sur ce numéro de GSM</label>
+                                </div>
+                                {% endif %}
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="personnes" class="form-label">Nombre de personnes</label>
@@ -262,19 +275,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // Jours sans service (congés, stages...) : { "2026-12-21": "Congés d'hiver" }
     let joursFermes = {};
     const MAX_DATES = {{ max_dates }};
-    let maxPersonnes = 26;
-    let maxPersonnesMardi = 30;
-    // Nouvelles capacites a partir de novembre 2026
-    let novDebut = '2026-11-01';
-    let novSemaine = 30;
-    let novVendredi = 32;
+    // Places par jour : reglees par l'equipe dans l'admin (page « Places »).
+    // placesSemaine : lundi a vendredi ; placesExceptions : jours regles a part.
+    let placesSemaine = [30, 30, 30, 30, 32];
+    let placesExceptions = {};
 
     // jourSemaine : 0=dimanche, 1=lundi, ..., 5=vendredi
     function maxPourLaDate(iso, jourSemaine) {
-        if (iso >= novDebut) {
-            return jourSemaine === 5 ? novVendredi : novSemaine;
-        }
-        return jourSemaine === 2 ? maxPersonnesMardi : maxPersonnes;
+        if (placesExceptions[iso] !== undefined) return placesExceptions[iso];
+        return placesSemaine[jourSemaine - 1] !== undefined ? placesSemaine[jourSemaine - 1] : 30;
     }
 
     const grilleEl = document.getElementById('calendrier-grille');
@@ -497,11 +506,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Une date deja choisie qui s'avere fermee est retiree
                 Object.keys(joursFermes).forEach(iso => datesSelectionnees.delete(iso));
                 majResume();
-                maxPersonnes = data.max_personnes || 26;
-                maxPersonnesMardi = data.max_personnes_mardi || 30;
-                novDebut = data.nov_debut || '2026-11-01';
-                novSemaine = data.nov_semaine || 30;
-                novVendredi = data.nov_vendredi || 32;
+                if (Array.isArray(data.places_semaine) && data.places_semaine.length === 5) {
+                    placesSemaine = data.places_semaine;
+                }
+                placesExceptions = data.places_exceptions || {};
                 dessinerCalendrier();
             }
         })

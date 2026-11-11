@@ -10,6 +10,7 @@ import re
 import html
 import time
 import secrets
+import urllib.error
 import urllib.request
 from collections import defaultdict, deque
 from email.mime.multipart import MIMEMultipart
@@ -57,6 +58,12 @@ BREVO_FROM_NAME = os.environ.get('BREVO_FROM_NAME', 'Restaurant Le Bouche à Ore
 # Adresse du restaurant : elle reçoit une copie de chaque nouvelle
 # réservation, et les clients qui répondent à un email tombent dessus.
 RESTAURANT_EMAIL = os.environ.get('RESTAURANT_EMAIL', 'stbernadette.restaurant@gmail.com')
+# Adresse de contact montree aux clients : sur le site (accueil, pied de
+# page, donnees personnelles) et comme adresse de reponse des emails envoyes
+# aux clients. Les copies des reservations et la feuille de service restent
+# sur RESTAURANT_EMAIL. Sans reglage : l'adresse de l'ecole de Fred (13/11/2026).
+CONTACT_EMAIL = (os.environ.get('CONTACT_EMAIL', '').strip()
+                 or 'frederic.cuvelier@sainte-bernadette-secondaire.be')
 RESTAURANT_TEL = os.environ.get('RESTAURANT_TEL', '0471 24 32 79')
 # Numero cliquable sur telephone (tel:+32...)
 _chiffres_resto = re.sub(r'\D', '', RESTAURANT_TEL)
@@ -69,6 +76,32 @@ SITE_URL = os.environ.get('SITE_URL', 'https://www.leboucheaoreilles.be').rstrip
 # Les groupes de plus de 10 personnes restent toujours à valider à la main.
 # Mettre CONFIRMATION_AUTOMATIQUE=1 dans Railway pour l'activer.
 CONFIRMATION_AUTOMATIQUE = os.environ.get('CONFIRMATION_AUTOMATIQUE', '0') == '1'
+
+# SMS au client (confirmation, annulation, modification), par Brevo : la
+# meme cle BREVO_API_KEY que pour les emails. Il faut acheter des credits
+# SMS dans le compte Brevo, puis mettre SMS_ACTIF=1 dans Railway.
+# Sans credits ou sans cle, rien ne part et le site continue de fonctionner.
+SMS_ACTIF = os.environ.get('SMS_ACTIF', '0') == '1'
+# Nom affiche comme expediteur du SMS : 11 caracteres maximum, lettres et
+# chiffres uniquement (regle de Brevo).
+SMS_EXPEDITEUR = re.sub(r'[^A-Za-z0-9]', '', os.environ.get('SMS_EXPEDITEUR', 'LeBouche'))[:11] or 'LeBouche'
+# Dans quels cas un SMS part (liste separee par des virgules).
+SMS_TYPES = tuple(t.strip() for t in os.environ.get('SMS_TYPES', 'confirmation,annulation,modification').split(',') if t.strip())
+# Prix d'un SMS vers la Belgique, pour l'estimation affichee dans l'admin
+# (a ajuster selon le tarif du compte Brevo).
+try:
+    SMS_PRIX_UNITAIRE = float(os.environ.get('SMS_PRIX_UNITAIRE', '0.095').replace(',', '.'))
+except ValueError:
+    SMS_PRIX_UNITAIRE = 0.095
+
+# Feuille de service : chaque matin de service, le restaurant recoit par
+# email la liste des tables du jour. Heure de Bruxelles, « HH:MM ».
+# Mettre FEUILLE_SERVICE_HEURE=non pour ne pas l'envoyer.
+FEUILLE_SERVICE_HEURE = os.environ.get('FEUILLE_SERVICE_HEURE', '07:30').strip()
+if not re.match(r'^([01]\d|2[0-3]):[0-5]\d$', FEUILLE_SERVICE_HEURE):
+    FEUILLE_SERVICE_HEURE = ''
+# Apres cette heure, la feuille n'est plus envoyee (le service est a 11h55).
+FEUILLE_SERVICE_LIMITE = '11:00'
 
 # Garde-fous du formulaire public
 # Les habitues reservent parfois 15 ou 20 fois par mois : 40 dates d'un coup (environ 2 mois de service)
@@ -169,6 +202,9 @@ def donnees_reservation(r):
         'message': r.message or '',
         'statut': r.statut,
         'lien_modif': lien_modification(r.groupe_reference),
+        # Le lien court ne sert qu'aux SMS : inutile de le creer sinon.
+        'sms': bool(r.sms),
+        'lien_court': lien_court(r.groupe_reference) if recoit_sms(r.telephone, r.email, r.sms) else '',
     }
 
 
@@ -176,6 +212,35 @@ def jeton_modification(groupe_reference):
     """Jeton signe (impossible a deviner ou a fabriquer) qui donne acces
     a la page « Modifier ma reservation » d'un groupe de reservations."""
     return URLSafeSerializer(current_app.secret_key, salt='modifier-reservation').dumps(groupe_reference)
+
+
+ALPHABET_CODE = 'abcdefghjkmnpqrstuvwxyz23456789'   # sans 0/o, 1/i/l : lisible sur un petit ecran
+
+
+def code_court(groupe_reference):
+    """Code du lien court d'un groupe de reservations (cree au besoin)."""
+    from models import db, LienCourt
+    if not groupe_reference:
+        return ''
+    existant = LienCourt.query.filter_by(groupe_reference=groupe_reference).first()
+    if existant:
+        return existant.code
+    while True:
+        code = ''.join(secrets.choice(ALPHABET_CODE) for _ in range(10))
+        if not db.session.get(LienCourt, code):
+            break
+    db.session.add(LienCourt(code=code, groupe_reference=groupe_reference))
+    db.session.commit()
+    return code
+
+
+def lien_court(groupe_reference):
+    """Lien court sans « https:// » (plus court dans un SMS ; les
+    telephones le rendent cliquable grace au « www. »)."""
+    code = code_court(groupe_reference)
+    if not code:
+        return ''
+    return f"{re.sub(r'^https?://', '', SITE_URL)}/m/{code}"
 
 
 def lien_modification(groupe_reference):
@@ -270,6 +335,170 @@ def envoyer_email(destinataire, sujet, html_content, texte='', repondre_a=None):
     return False, None, ' | '.join(erreurs)
 
 
+# ---------------------------------------------------------------------------
+# Envoi des SMS
+# ---------------------------------------------------------------------------
+
+JOURS_COURTS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
+
+
+def sms_disponible():
+    """Les SMS partent seulement si SMS_ACTIF=1 et qu'une cle Brevo existe."""
+    return SMS_ACTIF and bool(BREVO_API_KEY)
+
+
+def numero_gsm(telephone):
+    """Numero de GSM belge au format international ('32470123456'), ou
+    None si ce n'est pas un GSM belge (ligne fixe, numero etranger,
+    numero incomplet) : dans ce cas, pas de SMS."""
+    chiffres = re.sub(r'\D', '', telephone or '')
+    if chiffres.startswith('0032'):
+        chiffres = chiffres[2:]
+    if len(chiffres) == 10 and chiffres.startswith('04'):
+        return '32' + chiffres[1:]
+    if len(chiffres) == 11 and chiffres.startswith('324'):
+        return chiffres
+    return None
+
+
+def joignable_par_sms(telephone):
+    return sms_disponible() and numero_gsm(telephone) is not None
+
+
+def recoit_sms(telephone, email, a_demande):
+    """Un client recoit des SMS s'il l'a demande (case cochee) ou s'il
+    n'a pas donne d'adresse email. Les autres recoivent leurs emails
+    comme avant : c'est ce qui limite le cout des SMS."""
+    return joignable_par_sms(telephone) and (bool(a_demande) or not (email or '').strip())
+
+
+def _date_courte(iso):
+    """'2026-11-17' -> 'mar. 17/11'."""
+    try:
+        d = datetime.strptime(iso, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return str(iso)
+    return f"{JOURS_COURTS[d.weekday()]} {d.strftime('%d/%m')}"
+
+
+def _dates_sms(resas):
+    """Dates en version courte : 'le mar. 17/11', 'les 17/11, 18/11 et
+    24/11', ou 'pour 12 dates, du 17/11 au 18/12' quand il y en a trop."""
+    isos = sorted(r['date'] for r in resas)
+    jour_mois = [datetime.strptime(i, '%Y-%m-%d').strftime('%d/%m') for i in isos]
+    if len(isos) == 1:
+        return f"le {_date_courte(isos[0])}"
+    if len(isos) <= 4:
+        return "les " + ", ".join(jour_mois[:-1]) + " et " + jour_mois[-1]
+    return f"pour {len(isos)} dates, du {jour_mois[0]} au {jour_mois[-1]}"
+
+
+def _sms_complet(debut, lien, question='Un changement ?'):
+    """Ajoute au SMS le lien « changer ou annuler » et le telephone, tant
+    que le tout tient en 160 caracteres (un seul SMS) : d'abord les deux,
+    sinon le lien seul, sinon le telephone seul."""
+    tel = RESTAURANT_TEL
+    essais = []
+    if lien:
+        essais += [f"{debut} Changer ou annuler : {lien} ou tel. {tel}",
+                   f"{debut} Changer ou annuler : {lien}"]
+    essais += [f"{debut} {question} Tel. {tel}", f"{debut} Tel. {tel}"]
+    for texte in essais:
+        if len(texte) <= 160:
+            return texte
+    return essais[-1][:160]
+
+
+def texte_sms(type_mail, resas):
+    """Texte du SMS : sans accent et en 160 caracteres au plus, pour
+    qu'il ne compte que pour un seul SMS."""
+    tel = RESTAURANT_TEL
+    premiere = resas[0]
+    heure = premiere['heure'].replace(':', 'h')
+    lien = premiere.get('lien_court') or ''
+    if type_mail == 'annulation':
+        quand = _dates_sms(resas)
+        quand = 'du ' + quand[3:] if quand.startswith('le ') else 'des ' + quand[4:] if quand.startswith('les ') else quand
+        return _sms_complet(f"Le Bouche a Oreilles : votre reservation {quand} est annulee.", '',
+                            question='Une question ?')
+
+    actives = [r for r in resas if r.get('statut') != 'annulee']
+    if type_mail == 'lien_modification':
+        return _sms_complet("Le Bouche a Oreilles : votre reservation.", lien)
+    if type_mail == 'modification':
+        if not actives:
+            return f"Le Bouche a Oreilles : votre reservation est bien annulee. A bientot ! Tel. {tel}"
+        nombres = {r['personnes'] for r in actives}
+        if len(nombres) > 1:
+            return _sms_complet(f"Le Bouche a Oreilles : votre changement est enregistre ({len(actives)} dates).", lien,
+                                question='Une question ?')
+        n = nombres.pop()
+        return _sms_complet(f"Le Bouche a Oreilles : changement enregistre. {n} pers. {_dates_sms(actives)} a {heure}.", lien)
+    if type_mail == 'reception':
+        return _sms_complet(f"Le Bouche a Oreilles : demande bien recue pour {premiere['personnes']} pers. "
+                            f"{_dates_sms(resas)}. Elle doit encore etre confirmee.", '', question='')
+    # confirmation
+    return _sms_complet(f"Le Bouche a Oreilles : table confirmee, {premiere['personnes']} pers. "
+                        f"{_dates_sms(resas)} a {heure}.", lien)
+
+
+def envoyer_sms(numero, texte):
+    """Envoie un SMS par l'API de Brevo. Retourne (ok, erreur)."""
+    payload = {
+        'sender': SMS_EXPEDITEUR,
+        'recipient': numero,
+        'content': texte,
+        'type': 'transactional',
+        'tag': 'reservation',
+    }
+    requete = urllib.request.Request(
+        'https://api.brevo.com/v3/transactionalSMS/send',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'api-key': BREVO_API_KEY,
+            'Content-Type': 'application/json',
+            'accept': 'application/json',
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(requete, timeout=15) as reponse:
+            if reponse.status >= 300:
+                return False, f'Brevo SMS HTTP {reponse.status}'
+        print(f"✅ SMS envoyé à {numero}")
+        return True, None
+    except urllib.error.HTTPError as erreur:
+        # Brevo explique le refus dans le corps de la reponse (credits
+        # epuises, numero refuse...).
+        try:
+            detail = erreur.read().decode('utf-8', 'replace')[:300]
+        except Exception:
+            detail = ''
+        print(f"❌ SMS non envoyé à {numero} : HTTP {erreur.code} {detail}")
+        return False, f'HTTP {erreur.code} {detail}'.strip()
+    except Exception as erreur:
+        print(f"❌ SMS non envoyé à {numero} : {erreur}")
+        return False, str(erreur)
+
+
+def sms_client(type_mail, resas):
+    """SMS au client, en plus de l'email (ou a sa place s'il n'a pas
+    d'adresse). Un seul SMS par demande, meme avec plusieurs dates."""
+    # Le lien demande par le client lui-meme part toujours ; les autres
+    # SMS suivent le reglage SMS_TYPES.
+    if not resas or not sms_disponible() or (type_mail != 'lien_modification' and type_mail not in SMS_TYPES):
+        return
+    if TEST_EMAIL_REDIRECT:
+        return   # mode test : aucun message ne doit arriver chez un client
+    premiere = resas[0]
+    if not recoit_sms(premiere.get('telephone'), premiere.get('email'), premiere.get('sms')):
+        return
+    numero = numero_gsm(premiere.get('telephone'))
+    reference = premiere['groupe_reference'] if len(resas) > 1 and premiere.get('groupe_reference') else premiere['reference']
+    ok, erreur = envoyer_sms(numero, texte_sms(type_mail, resas))
+    _journaliser(f'sms_{type_mail}', numero, reference, ok, 'sms', erreur)
+
+
 def _journaliser(type_mail, destinataire, reference, ok, canal, erreur):
     """Note l'envoi dans la table email_envois (visible dans l'admin)."""
     from models import db, EmailEnvoi
@@ -341,11 +570,17 @@ def mail_client(type_mail, resas):
     annulation, modification ou lien_modification."""
     if not resas:
         return
+    # Le SMS part d'abord : il ne depend pas de l'email.
+    try:
+        sms_client(type_mail, resas)
+    except Exception:
+        traceback.print_exc()
     premiere = resas[0]
     destinataire = (premiere.get('email') or '').strip()
     reference = premiere['groupe_reference'] if len(resas) > 1 and premiere.get('groupe_reference') else premiere['reference']
     if not destinataire:
-        # Reservation prise par telephone sans adresse email : rien a envoyer.
+        # Pas d'adresse email (reservation par telephone, ou client qui a
+        # seulement donne son GSM) : pas d'email a envoyer.
         return
 
     nom = html.escape(premiere['nom'])
@@ -412,7 +647,7 @@ def mail_client(type_mail, resas):
 
     envoi_reel = TEST_EMAIL_REDIRECT or destinataire
     ok, canal, erreur = envoyer_email(envoi_reel, sujet, html_content, texte,
-                                      repondre_a=RESTAURANT_EMAIL or None)
+                                      repondre_a=CONTACT_EMAIL or RESTAURANT_EMAIL or None)
     _journaliser(type_mail, envoi_reel, reference, ok, canal, erreur)
 
 
@@ -454,6 +689,52 @@ def mail_restaurant(resas, url_admin=''):
     _journaliser('notification_resto', RESTAURANT_EMAIL, reference, ok, canal, erreur)
 
 
+def mail_feuille_service(jour_iso, resas, maximum, lien_vue=''):
+    """Feuille de service du jour, envoyee le matin au restaurant : les
+    tables par ordre alphabetique, les couverts et les remarques."""
+    if not RESTAURANT_EMAIL:
+        return
+    total = sum(r['personnes'] for r in resas)
+    en_attente = sum(1 for r in resas if r['statut'] == 'en_attente')
+    if resas:
+        sujet = f"Service du {date_fr(jour_iso)} : {len(resas)} table{'s' if len(resas) > 1 else ''}, {total} couverts"
+    else:
+        sujet = f"Service du {date_fr(jour_iso)} : aucune réservation pour l'instant"
+    cellule = 'padding: 8px 10px; border-bottom: 1px solid #dee2e6; text-align: left; vertical-align: top;'
+    lignes_html, lignes_texte = [], []
+    for r in resas:
+        etat = ' <em style="color: #b35c00;">(en attente)</em>' if r['statut'] == 'en_attente' else ''
+        lignes_html.append(
+            f'<tr><td style="{cellule}"><strong>{html.escape(r["nom"])}</strong>{etat}</td>'
+            f'<td style="{cellule} text-align: center; font-size: 20px;"><strong>{r["personnes"]}</strong></td>'
+            f'<td style="{cellule}">{html.escape(r["telephone"] or "-")}</td>'
+            f'<td style="{cellule}">{html.escape(r["message"] or "")}</td></tr>')
+        lignes_texte.append(f"- {r['nom']} : {r['personnes']} pers."
+                            + (' (en attente)' if r['statut'] == 'en_attente' else '')
+                            + (f" - {r['message']}" if r['message'] else ''))
+    resume = (f"<strong>{len(resas)}</strong> table{'s' if len(resas) > 1 else ''}, "
+              f"<strong>{total}</strong> couverts sur {maximum} places"
+              + (f", dont {en_attente} demande{'s' if en_attente > 1 else ''} encore à valider" if en_attente else '') + '.')
+    tableau = (f'<table style="border-collapse: collapse; width: 100%; font-size: 16px;">'
+               f'<tr style="background: #f1e7da;"><th style="{cellule}">Nom</th><th style="{cellule} text-align: center;">Couverts</th>'
+               f'<th style="{cellule}">Téléphone</th><th style="{cellule}">Remarque</th></tr>{"".join(lignes_html)}</table>'
+               if resas else '<p>Aucune réservation pour ce service pour l\'instant.</p>')
+    lien = (f'<p><a href="{html.escape(lien_vue)}">Ouvrir la vue du jour (pour l\'accueil par les élèves)</a></p>'
+            if lien_vue else '')
+    html_content = f"""
+    <html><body style="font-family: Arial, sans-serif; font-size: 17px; line-height: 1.5; max-width: 760px; margin: 0 auto; padding: 16px; color: #212529;">
+        <h2 style="color: #4a2f1f; margin: 0 0 6px 0;">Service du {html.escape(date_fr(jour_iso))}</h2>
+        <p style="margin: 0 0 16px 0;">{resume}</p>
+        {tableau}
+        {lien}
+        <p style="color: #6c757d; font-size: 14px;">Feuille envoyée automatiquement chaque matin de service par le site du restaurant.
+        Une réservation prise après cet envoi n'y figure pas : la liste à jour est dans l'admin.</p>
+    </body></html>"""
+    texte = "\n".join([sujet, ""] + lignes_texte + (["", lien_vue] if lien_vue else []))
+    ok, canal, erreur = envoyer_email(RESTAURANT_EMAIL, sujet, html_content, texte)
+    _journaliser('feuille_service', RESTAURANT_EMAIL, jour_iso, ok, canal, erreur)
+
+
 def emails_nouvelle_demande(resas, url_admin=''):
     """Apres une reservation en ligne : email au client (accuse de
     reception, ou confirmation directe) + copie au restaurant."""
@@ -479,32 +760,51 @@ def envoyer_annulation_email(nom, email, date, heure, personnes, reference):
 # Capacite, jours fermes, references
 # ---------------------------------------------------------------------------
 
-# Nombre maximum de personnes par date. Au-dela, la date
-# est consideree comme complete et n'est plus reservable.
-MAX_PERSONNES_PAR_DATE = 26
-# Exception : le mardi, le maximum est de 30 personnes.
-MAX_PERSONNES_MARDI = 30
+# Nombre de places par jour. L'equipe le regle elle-meme dans l'admin
+# (page « Places ») : un nombre par jour de la semaine, et au besoin un
+# nombre different pour un jour precis (banquet, classe en stage...).
+# Tant que rien n'est regle dans l'admin, ces valeurs servent de depart
+# (celles en vigueur depuis novembre 2026) : lundi a vendredi.
+PLACES_PAR_DEFAUT = (30, 30, 30, 30, 32)
+PLACES_MAX_REGLABLE = 99
 
-# A partir du 1er novembre 2026 : 30 personnes du lundi au jeudi,
-# 32 le vendredi. (Le weekend n'est pas reservable dans le calendrier.)
-NOV_DEBUT = date(2026, 11, 1)
-MAX_PERSONNES_SEMAINE_NOV = 30
-MAX_PERSONNES_VENDREDI_NOV = 32
 
-def max_personnes_pour_date(date_str):
-    """Retourne le maximum de personnes autorise pour une date.
-
-    Avant le 1er novembre 2026 : 26 personnes, 30 le mardi.
-    A partir du 1er novembre 2026 : 30 du lundi au jeudi, 32 le vendredi.
-    """
+def places_par_jour():
+    """[lundi, ..., vendredi] : reglage de l'admin, sinon valeur de depart."""
+    from models import Reglage
+    places = list(PLACES_PAR_DEFAUT)
     try:
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-    except ValueError:
-        return MAX_PERSONNES_PAR_DATE
-    jour_semaine = date_obj.weekday()  # lundi=0 ... vendredi=4 ... dimanche=6
-    if date_obj >= NOV_DEBUT:
-        return MAX_PERSONNES_VENDREDI_NOV if jour_semaine == 4 else MAX_PERSONNES_SEMAINE_NOV
-    return MAX_PERSONNES_MARDI if jour_semaine == 1 else MAX_PERSONNES_PAR_DATE
+        for reglage in Reglage.query.filter(Reglage.cle.like('places_%')).all():
+            indice = int(reglage.cle.split('_')[1])
+            if 0 <= indice <= 4:
+                places[indice] = int(reglage.valeur)
+    except Exception:
+        pass   # table absente ou valeur illisible : on garde les valeurs de depart
+    return places
+
+
+def places_exceptions():
+    """{ 'AAAA-MM-JJ': maximum } pour les jours regles a part."""
+    from models import CapaciteJour
+    try:
+        return {c.date: c.maximum for c in CapaciteJour.query.all()}
+    except Exception:
+        return {}
+
+
+def max_personnes_pour_date(date_str, semaine=None, exceptions=None):
+    """Nombre maximum de personnes pour une date : le reglage du jour
+    precis s'il existe, sinon celui du jour de la semaine. `semaine` et
+    `exceptions` evitent de relire la base quand on traite plusieurs dates."""
+    exceptions = places_exceptions() if exceptions is None else exceptions
+    if date_str in exceptions:
+        return exceptions[date_str]
+    semaine = places_par_jour() if semaine is None else semaine
+    try:
+        jour_semaine = datetime.strptime(date_str, '%Y-%m-%d').date().weekday()
+    except (TypeError, ValueError):
+        return min(semaine)
+    return semaine[jour_semaine] if jour_semaine <= 4 else min(semaine)
 
 
 def places_occupees(date_iso):
@@ -587,6 +887,7 @@ def _formulaire(valeurs=None, messages=(), code=200):
                            confirmation_automatique=CONFIRMATION_AUTOMATIQUE,
                            telephone_resto=RESTAURANT_TEL,
                            max_dates=MAX_DATES_PAR_DEMANDE,
+                           sms_actif=sms_disponible(),
                            valeurs=valeurs or {}), code
 
 
@@ -617,11 +918,10 @@ def api_occupation_dates():
         return jsonify({
             'occupation': occupation,
             'fermes': jours_fermes(),
-            'max_personnes': MAX_PERSONNES_PAR_DATE,
-            'max_personnes_mardi': MAX_PERSONNES_MARDI,
-            'nov_debut': NOV_DEBUT.isoformat(),
-            'nov_semaine': MAX_PERSONNES_SEMAINE_NOV,
-            'nov_vendredi': MAX_PERSONNES_VENDREDI_NOV
+            # Places par jour de la semaine (lundi a vendredi) et jours
+            # regles a part dans l'admin.
+            'places_semaine': places_par_jour(),
+            'places_exceptions': places_exceptions(),
         })
     except Exception as e:
         return jsonify({'erreur': str(e)}), 500
@@ -641,14 +941,23 @@ def creer_reservation():
     telephone = request.form.get('telephone', '').strip()
     heure = request.form.get('heure', '').strip()
     message = request.form.get('message', '').strip()
+    veut_sms = request.form.get('sms') == '1'
 
     erreurs = []
     if not 2 <= len(nom) <= 100:
         erreurs.append("Merci d'indiquer votre nom.")
-    if len(email) > 120 or not EMAIL_RE.match(email):
-        erreurs.append("L'adresse email ne semble pas correcte.")
-    if not 6 <= len(re.sub(r'\D', '', telephone)) <= 15 or len(telephone) > 20:
+    telephone_correct = 6 <= len(re.sub(r'\D', '', telephone)) <= 15 and len(telephone) <= 20
+    if not telephone_correct:
         erreurs.append("Le numéro de téléphone ne semble pas correct.")
+    if email:
+        if len(email) > 120 or not EMAIL_RE.match(email):
+            erreurs.append("L'adresse email ne semble pas correcte.")
+    elif not sms_disponible():
+        erreurs.append("Merci d'indiquer votre adresse email.")
+    elif telephone_correct and not numero_gsm(telephone):
+        # Sans email, la confirmation ne peut arriver que par SMS.
+        erreurs.append("Sans adresse email, indiquez un numéro de GSM (04…) : votre confirmation arrivera par SMS. "
+                       f"Vous pouvez aussi réserver par téléphone au {RESTAURANT_TEL}.")
     if heure not in HEURES_SERVICE:
         erreurs.append("L'heure choisie n'est pas disponible.")
     if len(message) > 1000:
@@ -703,6 +1012,12 @@ def creer_reservation():
             flash(f"Vous avez déjà une réservation le {date_fr(deja.date)}. Pour changer le nombre de personnes, "
                   "utilisez le bouton « Modifier ou annuler ma réservation » de votre email : nous venons de "
                   f"vous le renvoyer. Vous pouvez aussi nous appeler au {RESTAURANT_TEL}.", 'error')
+        elif recoit_sms(deja.telephone, deja.email, deja.sms):
+            en_arriere_plan(mail_client, 'lien_modification',
+                            [donnees_reservation(r) for r in groupe if r.statut != 'annulee'])
+            flash(f"Vous avez déjà une réservation le {date_fr(deja.date)}. Pour changer le nombre de personnes ou annuler, "
+                  "utilisez le lien que nous venons de vous envoyer par SMS. "
+                  f"Vous pouvez aussi nous appeler au {RESTAURANT_TEL}.", 'error')
         else:
             flash(f"Vous avez déjà une réservation le {date_fr(deja.date)}. Pour la modifier, appelez-nous au {RESTAURANT_TEL}.", 'error')
         return _formulaire(request.form, code=409)
@@ -710,8 +1025,9 @@ def creer_reservation():
     try:
         # Verifier qu'aucune date selectionnee n'est deja complete.
         # On compte les personnes des reservations non annulees.
+        semaine, exceptions = places_par_jour(), places_exceptions()
         dates_completes = [d for d in dates
-                           if places_occupees(d) + personnes > max_personnes_pour_date(d)]
+                           if places_occupees(d) + personnes > max_personnes_pour_date(d, semaine, exceptions)]
         if dates_completes:
             liste = ', '.join(date_fr(d) for d in dates_completes)
             if len(dates_completes) == 1:
@@ -738,6 +1054,7 @@ def creer_reservation():
                 message=message,
                 statut=statut,
                 source='web',
+                sms=veut_sms,
             )
             db.session.add(nouvelle_reservation)
             db.session.flush()   # reference visible pour la date suivante
@@ -826,6 +1143,47 @@ def emails_modification(avant, apres):
     mail_restaurant_modification(avant, apres)
 
 
+@reservation_bp.route('/retrouver', methods=['GET', 'POST'])
+def retrouver():
+    """Le client n'a plus son email ou son SMS : il tape son numero de GSM
+    ou son adresse email, et on lui renvoie le lien pour modifier ou
+    annuler. La reponse affichee est toujours la meme, qu'on ait trouve
+    une reservation ou non (on ne revele pas qui a reserve)."""
+    from models import Reservation
+    if request.method == 'POST':
+        contact = request.form.get('contact', '').strip()[:120]
+        if request.form.get('site_web', '').strip():      # piege a robots
+            return redirect(url_for('accueil'))
+        if not contact:
+            flash("Indiquez votre numéro de GSM ou votre adresse email.", 'error')
+            return redirect(url_for('reservation.retrouver'))
+        est_email = '@' in contact
+        cle = contact.lower() if est_email else _chiffres_tel(contact)
+        # Garde-fous : chaque envoi peut couter un SMS.
+        if (limite_atteinte(f'retrouver-ip:{adresse_ip()}', 5, 3600)
+                or limite_atteinte(f'retrouver:{cle}', 2, 24 * 3600)):
+            flash(f"Trop de demandes pour aujourd'hui. Appelez-nous au {RESTAURANT_TEL}.", 'error')
+            return redirect(url_for('reservation.retrouver'))
+        aujourd_hui = date.today().isoformat()
+        a_venir = Reservation.query.filter(Reservation.date >= aujourd_hui,
+                                           Reservation.statut.in_(['en_attente', 'confirmee'])).order_by(Reservation.date).all()
+        if est_email:
+            trouvees = [r for r in a_venir if (r.email or '').strip().lower() == cle]
+        else:
+            trouvees = [r for r in a_venir if len(cle) >= 8 and _chiffres_tel(r.telephone) == cle]
+        # Un message par demande d'origine (groupe), trois au plus.
+        groupes = {}
+        for r in trouvees:
+            groupes.setdefault(r.groupe_reference or r.reference, []).append(r)
+        for resas in list(groupes.values())[:3]:
+            if resas[0].groupe_reference and (resas[0].email or recoit_sms(resas[0].telephone, resas[0].email, resas[0].sms)):
+                en_arriere_plan(mail_client, 'lien_modification', [donnees_reservation(r) for r in resas])
+        return render_template('retrouver_reservation.html', envoye=True, par_email=est_email,
+                               telephone_resto=RESTAURANT_TEL, sms_actif=sms_disponible())
+    return render_template('retrouver_reservation.html', envoye=False,
+                           telephone_resto=RESTAURANT_TEL, sms_actif=sms_disponible())
+
+
 def _modifiable(r, aujourd_hui):
     """Modifiable en ligne jusqu'a la veille ; le jour meme, on telephone."""
     return r.statut != 'annulee' and r.date > aujourd_hui
@@ -890,7 +1248,12 @@ def modifier(jeton):
             return redirect(url_for('reservation.modifier', jeton=jeton))
         db.session.commit()
         en_arriere_plan(emails_modification, avant, [donnees_reservation(r) for r in resas])
-        flash("C'est enregistré. Vous allez recevoir un email avec votre réservation à jour.", 'success')
+        if resas[0].email:
+            flash("C'est enregistré. Vous allez recevoir un email avec votre réservation à jour.", 'success')
+        elif recoit_sms(resas[0].telephone, resas[0].email, resas[0].sms):
+            flash("C'est enregistré. Vous allez recevoir un SMS de confirmation.", 'success')
+        else:
+            flash("C'est enregistré.", 'success')
         return redirect(url_for('reservation.modifier', jeton=jeton))
 
     modifiables = [r for r in resas if _modifiable(r, aujourd_hui)]

@@ -153,6 +153,9 @@
                         <a class="nav-link" href="{{ url_for('admin_fermetures') }}"><i class="bi bi-calendar-x"></i> Jours fermés</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_places') }}"><i class="bi bi-people"></i> Places</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('admin_menu') }}">Menu</a>
                     </li>
                 </ul>
@@ -206,8 +209,8 @@
             {% endwith %}
 
             {% for niveau, texte in alertes %}
-                <div class="alert alert-{{ niveau }} no-print" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i> {{ texte }}
+                <div class="alert alert-{{ niveau }} {{ 'border small py-2' if niveau == 'light' }} no-print" role="alert">
+                    <i class="bi {{ 'bi-bar-chart' if niveau == 'light' else 'bi-exclamation-triangle-fill' }} me-1"></i> {{ texte }}
                 </div>
             {% endfor %}
 
@@ -236,6 +239,13 @@
                                 {% if reservation.source == 'telephone' %}<i class="bi bi-telephone text-primary" title="Réservation prise par téléphone"></i> {% endif %}{{ reservation.nom }}
                                 {% if reservation.groupe_reference %}
                                 <br><span class="text-muted small" title="Réservation multi-dates">{{ reservation.groupe_reference }}</span>
+                                {% endif %}
+                                {% if reservation.statut == 'en_attente' and groupes_en_attente.get(reservation.groupe_reference) %}
+                                <form action="{{ url_for('confirmer_groupe', groupe_reference=reservation.groupe_reference) }}" method="POST" class="no-print mt-1">
+                                    <button type="submit" class="btn btn-sm btn-outline-success text-nowrap" title="Confirme toutes les dates de cette demande : le client reçoit un seul message">
+                                        <i class="bi bi-check-all"></i> Confirmer ses {{ groupes_en_attente[reservation.groupe_reference] }} dates
+                                    </button>
+                                </form>
                                 {% endif %}
                             </td>
                             <td>{{ reservation.email or '-' }}</td>
@@ -266,6 +276,16 @@
                                         <i class="bi bi-envelope-x"></i> {{ envoi.type_mail }} non parti
                                     </span>
                                 {% endif %}
+                                {% set sms = etats_sms.get(reservation.id) %}
+                                {% if sms is not none and sms.statut == 'envoye' %}
+                                    <span class="badge bg-light text-success border" title="SMS parti le {{ sms.created_at|heure_locale }} vers {{ sms.destinataire }}">
+                                        <i class="bi bi-phone"></i> SMS
+                                    </span>
+                                {% elif sms is not none %}
+                                    <span class="badge bg-danger" title="SMS non parti le {{ sms.created_at|heure_locale }} : {{ sms.erreur }}">
+                                        <i class="bi bi-phone"></i> SMS non parti
+                                    </span>
+                                {% endif %}
                             </td>
                             <td class="d-flex col-actions">
                                 <a href="{{ url_for('modifier_reservation', id=reservation.id) }}" class="btn btn-sm btn-primary me-1" title="Modifier">
@@ -288,9 +308,9 @@
                                     </button>
                                 </form>
                                 {% endif %}
-                                {% if reservation.email and reservation.statut in ('confirmee', 'annulee') %}
+                                {% if (reservation.email or recoit_sms(reservation.telephone, reservation.email, reservation.sms)) and reservation.statut in ('confirmee', 'annulee') %}
                                 <form action="{{ url_for('renvoyer_email', id=reservation.id) }}" method="POST" class="me-1">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Renvoyer l'email de {{ 'confirmation' if reservation.statut == 'confirmee' else 'annulation' }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Renvoyer le message de {{ 'confirmation' if reservation.statut == 'confirmee' else 'annulation' }}{% if recoit_sms(reservation.telephone, reservation.email, reservation.sms) %} (SMS compris){% endif %}">
                                         <i class="bi bi-envelope"></i>
                                     </button>
                                 </form>

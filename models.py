@@ -52,6 +52,9 @@ class Reservation(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     # 'web' (formulaire du site) ou 'telephone' (saisie par l'equipe)
     source = db.Column(db.String(20), default='web')
+    # Le client a demande a recevoir ses messages par SMS (case cochee).
+    # Sans adresse email, le SMS part de toute facon.
+    sms = db.Column(db.Boolean, default=False)
 
 class EmailEnvoi(db.Model):
     """Journal des emails : chaque tentative d'envoi est notee ici, pour
@@ -61,11 +64,11 @@ class EmailEnvoi(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    type_mail = db.Column(db.String(30), nullable=False)   # reception, confirmation, annulation, notification_resto
+    type_mail = db.Column(db.String(30), nullable=False)   # reception, confirmation, annulation, notification_resto, sms_confirmation...
     destinataire = db.Column(db.String(120))
     reference = db.Column(db.String(30), index=True)       # reference de la reservation ou du groupe
     statut = db.Column(db.String(10), nullable=False)      # envoye / echec
-    canal = db.Column(db.String(20))                       # smtp, brevo, resend
+    canal = db.Column(db.String(20))                       # smtp, brevo, resend, sms
     erreur = db.Column(db.Text)
 
 class JourFerme(db.Model):
@@ -76,3 +79,32 @@ class JourFerme(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.String(10), unique=True, nullable=False)  # AAAA-MM-JJ
     motif = db.Column(db.String(120))
+
+class Reglage(db.Model):
+    """Petits reglages modifiables depuis l'admin (cle -> valeur).
+    Sert aux places par jour de la semaine : places_0 (lundi) ... places_4
+    (vendredi)."""
+    __tablename__ = 'reglages'
+
+    cle = db.Column(db.String(40), primary_key=True)
+    valeur = db.Column(db.String(200), nullable=False)
+
+class CapaciteJour(db.Model):
+    """Nombre de places pour un jour precis, quand il differe du reglage
+    habituel (banquet, classe en stage, salle reduite...)."""
+    __tablename__ = 'capacites_jour'
+
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(10), unique=True, nullable=False)  # AAAA-MM-JJ
+    maximum = db.Column(db.Integer, nullable=False)
+    motif = db.Column(db.String(120))
+
+class LienCourt(db.Model):
+    """Adresse courte (www.../m/<code>) vers la page « Modifier ou annuler
+    ma reservation » : assez courte pour tenir dans un SMS. Le code est
+    tire au hasard, impossible a deviner."""
+    __tablename__ = 'liens_courts'
+
+    code = db.Column(db.String(16), primary_key=True)
+    groupe_reference = db.Column(db.String(20), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

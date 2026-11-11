@@ -33,6 +33,7 @@
     {% if introuvable %}
         <h1>Lien non valide</h1>
         <p>Ce lien ne correspond à aucune réservation. Pour toute question, appelez-nous au <strong>{{ telephone_resto }}</strong>.</p>
+        <p><a href="{{ url_for('reservation.retrouver') }}" class="btn btn-outline-primary btn-lg">Recevoir un nouveau lien</a></p>
     {% else %}
         <h1>Ma réservation</h1>
         {% if nb_modifiables %}

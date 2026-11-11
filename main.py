@@ -18,7 +18,7 @@ from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 
 # Importation des modèles
-from models import db, Plat, Reservation, MenuDocument, MenuDocumentPage, EmailEnvoi, JourFerme
+from models import db, Plat, Reservation, MenuDocument, MenuDocumentPage, EmailEnvoi, JourFerme, Reglage, CapaciteJour
 
 # Importation du blueprint de réservation
 import reservation_client as rc
@@ -71,6 +71,10 @@ def migrer_colonnes_manquantes():
         colonnes = {c['name'] for c in inspector.get_columns('reservations')}
         if 'groupe_reference' not in colonnes:
             db.session.execute(db.text('ALTER TABLE reservations ADD COLUMN groupe_reference VARCHAR(20)'))
+            db.session.commit()
+        if 'sms' not in colonnes:
+            faux = 'FALSE' if db.engine.dialect.name == 'postgresql' else '0'
+            db.session.execute(db.text(f'ALTER TABLE reservations ADD COLUMN sms BOOLEAN DEFAULT {faux}'))
             db.session.commit()
         if 'source' not in colonnes:
             db.session.execute(db.text("ALTER TABLE reservations ADD COLUMN source VARCHAR(20) DEFAULT 'web'"))
@@ -149,9 +153,11 @@ def admin_logout():
 # Suivi des emails dans l'admin
 # ---------------------------------------------------------------------------
 
-def etat_emails(reservations):
+def etat_emails(reservations, types=None):
     """Dernier email client (reception, confirmation ou annulation) connu
-    pour chaque reservation : {id: EmailEnvoi ou None}."""
+    pour chaque reservation : {id: EmailEnvoi ou None}. Avec `types`,
+    meme chose pour d'autres envois (les SMS)."""
+    types = types or rc.TYPES_MAIL_CLIENT
     refs = set()
     for r in reservations:
         refs.add(r.reference)
@@ -161,7 +167,7 @@ def etat_emails(reservations):
         return {}
     journaux = (EmailEnvoi.query
                 .filter(EmailEnvoi.reference.in_(refs),
-                        EmailEnvoi.type_mail.in_(rc.TYPES_MAIL_CLIENT))
+                        EmailEnvoi.type_mail.in_(types))
                 .order_by(EmailEnvoi.created_at.asc(), EmailEnvoi.id.asc())
                 .all())
     dernier = {}
@@ -172,6 +178,21 @@ def etat_emails(reservations):
         candidats = [c for c in (dernier.get(r.reference), dernier.get(r.groupe_reference)) if c]
         etats[r.id] = max(candidats, key=lambda c: (c.created_at, c.id)) if candidats else None
     return etats
+
+
+TYPES_SMS = tuple(f'sms_{t}' for t in ('reception', 'confirmation', 'annulation', 'modification'))
+
+
+def etat_sms(reservations):
+    """Dernier SMS connu pour chaque reservation : {id: EmailEnvoi ou None}."""
+    return etat_emails(reservations, TYPES_SMS)
+
+
+def envois_partis(depuis, sms):
+    """Nombre d'emails (ou de SMS) partis depuis une date, pour suivre
+    les quotas gratuits et le cout."""
+    filtre = EmailEnvoi.canal == 'sms' if sms else db.or_(EmailEnvoi.canal != 'sms', EmailEnvoi.canal.is_(None))
+    return EmailEnvoi.query.filter(filtre, EmailEnvoi.statut == 'envoye', EmailEnvoi.created_at >= depuis).count()
 
 
 def alertes_admin():
@@ -192,6 +213,25 @@ def alertes_admin():
         suite = '…' if len(echecs) > 8 else ''
         alertes.append(('danger', f"{len(echecs)} client(s) n'ont pas reçu leur dernier email : {noms}{suite}. "
                                   "Renvoyez-le (bouton ✉) ou appelez-les."))
+
+    if rc.sms_disponible():
+        dernier_sms = EmailEnvoi.query.filter_by(canal='sms').order_by(EmailEnvoi.created_at.desc(), EmailEnvoi.id.desc()).first()
+        if dernier_sms is not None and dernier_sms.statut == 'echec':
+            alertes.append(('danger', f"Le dernier SMS n'est pas parti ({dernier_sms.erreur or 'erreur inconnue'}). "
+                                      "Vérifiez qu'il reste des crédits SMS dans le compte Brevo. "
+                                      "En attendant, les emails continuent de partir."))
+
+    # Suivi des envois : les offres gratuites comptent par jour et par mois.
+    maintenant = datetime.utcnow()
+    debut_jour = maintenant.replace(hour=0, minute=0, second=0, microsecond=0)
+    debut_mois = debut_jour.replace(day=1)
+    suivi = (f"Emails envoyés : {envois_partis(debut_jour, sms=False)} aujourd'hui, "
+             f"{envois_partis(debut_mois, sms=False)} ce mois-ci.")
+    if rc.sms_disponible():
+        nombre = envois_partis(debut_mois, sms=True)
+        cout = f"{nombre * rc.SMS_PRIX_UNITAIRE:.2f}".replace('.', ',')
+        suivi += f" SMS envoyés ce mois-ci : {nombre} (environ {cout} €)."
+    alertes.append(('light', suivi))
 
     limite = datetime.utcnow() - timedelta(hours=24)
     en_retard = Reservation.query.filter(Reservation.statut == 'en_attente',
@@ -229,6 +269,8 @@ def afficher_toutes_reservations():
                              statut_actuel=statut,
                              now=datetime.now(),
                              etats=etat_emails(reservations),
+                             etats_sms=etat_sms(reservations) if rc.sms_disponible() else {},
+                             groupes_en_attente=groupes_en_attente(),
                              alertes=alertes_admin())
     except Exception as e:
         app.logger.error(f"Erreur lors de la récupération des réservations: {e}")
@@ -260,6 +302,7 @@ def reservations_par_date():
 
         # Construire un résumé trié par date croissante
         resume = []
+        semaine, exceptions = rc.places_par_jour(), rc.places_exceptions()
         for date_str in sorted(par_date.keys()):
             liste = par_date[date_str]
             nb_tables = len(liste)
@@ -271,6 +314,7 @@ def reservations_par_date():
                 'date': date_str,
                 'nb_tables': nb_tables,
                 'nb_personnes': nb_personnes,
+                'maximum': rc.max_personnes_pour_date(date_str, semaine, exceptions),
                 'confirmees': confirmees,
                 'en_attente': en_attente,
                 'reservations': liste,
@@ -739,6 +783,21 @@ def supprimer_menu_pdf():
     return redirect(url_for('admin_menu'))
 
 
+@app.route('/m/<code>')
+def lien_court(code):
+    """Adresse courte envoyee par SMS : renvoie vers la page « Modifier
+    ou annuler ma reservation » du client."""
+    from models import LienCourt
+    if rc.limite_atteinte(f'lien-court:{rc.adresse_ip()}', 30, 3600):
+        flash(f"Trop de tentatives. Réessayez plus tard ou appelez-nous au {rc.RESTAURANT_TEL}.", 'error')
+        return redirect(url_for('page_accueil'))
+    lien = db.session.get(LienCourt, code[:16])
+    if lien is None:
+        return render_template('modifier_reservation_client.html', introuvable=True,
+                               telephone_resto=rc.RESTAURANT_TEL), 404
+    return redirect(url_for('reservation.modifier', jeton=rc.jeton_modification(lien.groupe_reference)))
+
+
 @app.route('/reserver')
 def reserver():
     """Rediriger vers le blueprint de réservation pour maintenir la compatibilité"""
@@ -826,14 +885,17 @@ def confirmation_groupe(groupe_reference):
 @login_required
 def renvoyer_email(id):
     reservation = Reservation.query.get_or_404(id)
-    if not reservation.email:
-        flash("Pas d'adresse email pour ce client : appelez-le.", 'warning')
+    par_sms = rc.recoit_sms(reservation.telephone, reservation.email, reservation.sms)
+    if not reservation.email and not par_sms:
+        flash("Ni adresse email ni numéro de GSM pour ce client : appelez-le.", 'warning')
     elif reservation.statut == 'en_attente':
         flash("Cette réservation est encore en attente : confirmez-la (✓) pour envoyer la confirmation.", 'warning')
     else:
         type_mail = 'confirmation' if reservation.statut == 'confirmee' else 'annulation'
         en_arriere_plan(mail_client, type_mail, [donnees_reservation(reservation)])
-        flash(f"Email de {type_mail} renvoyé à {reservation.email}. Le résultat s'affiche dans la colonne « Email ».", 'success')
+        moyens = ' et '.join(m for m in (f"email à {reservation.email}" if reservation.email else '',
+                                         f"SMS au {reservation.telephone}" if par_sms and type_mail in rc.SMS_TYPES else '') if m)
+        flash(f"Message de {type_mail} renvoyé ({moyens}). Le résultat s'affiche dans la colonne « Statut ».", 'success')
     return redirect(url_for('afficher_toutes_reservations'))
 
 
@@ -896,10 +958,11 @@ def ajouter_reservation_admin():
             nom=nom, email=email, telephone=telephone, date=jour,
             heure=request.form.get('heure') if request.form.get('heure') in rc.HEURES_SERVICE else rc.HEURES_SERVICE[0],
             personnes=personnes, message=message, statut=statut, source='telephone',
+            sms=envoyer,   # l'equipe a coche « envoyer la confirmation » : SMS si c'est un GSM
         )
         db.session.add(reservation)
         db.session.commit()
-        if envoyer and email and statut == 'confirmee':
+        if envoyer and statut == 'confirmee' and (email or rc.joignable_par_sms(telephone)):
             en_arriere_plan(mail_client, 'confirmation', [donnees_reservation(reservation)])
         flash(f"Réservation enregistrée : {nom}, {personnes} pers., {rc.date_fr(jour)}.", 'success')
         return redirect(url_for('afficher_toutes_reservations'))
@@ -959,9 +1022,301 @@ def supprimer_fermeture(id):
     return redirect(url_for('admin_fermetures'))
 
 
+# ---------------------------------------------------------------------------
+# Admin : confirmer toutes les dates d'une demande en une fois
+# ---------------------------------------------------------------------------
+
+def groupes_en_attente():
+    """{reference de groupe: nombre de dates en attente}, pour les
+    demandes qui ont au moins deux dates a valider."""
+    lignes = (db.session.query(Reservation.groupe_reference, db.func.count(Reservation.id))
+              .filter(Reservation.statut == 'en_attente', Reservation.groupe_reference.isnot(None),
+                      Reservation.date >= date.today().isoformat())
+              .group_by(Reservation.groupe_reference).all())
+    return {ref: n for ref, n in lignes if ref and n >= 2}
+
+
+@app.route('/admin/groupe/<groupe_reference>/confirmer', methods=['POST'])
+@login_required
+def confirmer_groupe(groupe_reference):
+    """Un habitue reserve 15 dates d'un coup : un seul clic les confirme
+    toutes, et le client recoit un seul email (et un seul SMS) qui les
+    liste, au lieu d'un message par date."""
+    en_attente = (Reservation.query
+                  .filter(Reservation.groupe_reference == groupe_reference,
+                          Reservation.statut == 'en_attente',
+                          Reservation.date >= date.today().isoformat())
+                  .order_by(Reservation.date).all())
+    if not en_attente:
+        flash("Plus aucune date en attente pour cette demande.", 'info')
+        return redirect(url_for('afficher_toutes_reservations'))
+    for r in en_attente:
+        r.statut = 'confirmee'
+    db.session.commit()
+    en_arriere_plan(mail_client, 'confirmation', [donnees_reservation(r) for r in en_attente])
+    flash(f"{len(en_attente)} dates confirmées pour {en_attente[0].nom}. Le client reçoit un seul message qui les reprend toutes.", 'success')
+    return redirect(url_for('afficher_toutes_reservations'))
+
+
+# ---------------------------------------------------------------------------
+# Admin : nombre de places par jour
+# ---------------------------------------------------------------------------
+
+NOMS_JOURS = ('Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi')
+
+
+def jours_trop_remplis(depuis=None):
+    """Jours a venir ou il y a deja plus d'inscrits que de places."""
+    depuis = depuis or date.today().isoformat()
+    semaine, exceptions = rc.places_par_jour(), rc.places_exceptions()
+    totaux = (db.session.query(Reservation.date, db.func.sum(Reservation.personnes))
+              .filter(Reservation.date >= depuis, Reservation.statut.in_(['en_attente', 'confirmee']))
+              .group_by(Reservation.date).all())
+    trop = []
+    for jour, total in totaux:
+        maximum = rc.max_personnes_pour_date(jour, semaine, exceptions)
+        if (total or 0) > maximum:
+            trop.append((jour, int(total), maximum))
+    return sorted(trop)
+
+
+def _nombre_de_places(texte):
+    """Nombre saisi dans l'admin -> entier entre 1 et le plafond, sinon None."""
+    try:
+        nombre = int((texte or '').strip())
+    except ValueError:
+        return None
+    return nombre if 1 <= nombre <= rc.PLACES_MAX_REGLABLE else None
+
+
+@app.route('/admin/places', methods=['GET', 'POST'])
+@login_required
+def admin_places():
+    """L'equipe regle elle-meme le nombre de places : par jour de la
+    semaine, et pour un jour precis quand il faut plus ou moins."""
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'semaine':
+            nouveaux = [_nombre_de_places(request.form.get(f'places_{i}')) for i in range(5)]
+            if None in nouveaux:
+                flash(f"Indiquez un nombre entre 1 et {rc.PLACES_MAX_REGLABLE} pour chaque jour. "
+                      "Pour fermer un jour, utilisez « Jours fermés ».", 'danger')
+                return redirect(url_for('admin_places'))
+            for i, nombre in enumerate(nouveaux):
+                reglage = db.session.get(Reglage, f'places_{i}')
+                if reglage is None:
+                    db.session.add(Reglage(cle=f'places_{i}', valeur=str(nombre)))
+                else:
+                    reglage.valeur = str(nombre)
+            db.session.commit()
+            flash("Places par jour enregistrées. Le calendrier du site en tient compte tout de suite.", 'success')
+        elif action == 'jour':
+            jour = request.form.get('date', '').strip()
+            nombre = _nombre_de_places(request.form.get('maximum'))
+            motif = request.form.get('motif', '').strip()[:120]
+            try:
+                jour_obj = datetime.strptime(jour, '%Y-%m-%d').date()
+            except ValueError:
+                jour_obj = None
+            if jour_obj is None or nombre is None:
+                flash(f"Indiquez une date et un nombre de places entre 1 et {rc.PLACES_MAX_REGLABLE}.", 'danger')
+            elif jour_obj.weekday() >= 5:
+                flash("Le restaurant est fermé le week-end.", 'danger')
+            else:
+                existant = CapaciteJour.query.filter_by(date=jour).first()
+                if existant is None:
+                    db.session.add(CapaciteJour(date=jour, maximum=nombre, motif=motif))
+                else:
+                    existant.maximum, existant.motif = nombre, motif
+                db.session.commit()
+                flash(f"{rc.date_fr(jour)} : {nombre} places.", 'success')
+        return redirect(url_for('admin_places'))
+
+    aujourd_hui = date.today().isoformat()
+    exceptions = CapaciteJour.query.filter(CapaciteJour.date >= aujourd_hui).order_by(CapaciteJour.date).all()
+    semaine = rc.places_par_jour()
+    occupees = {e.date: rc.places_occupees(e.date) for e in exceptions}
+    habituel = {e.date: rc.max_personnes_pour_date(e.date, semaine, {}) for e in exceptions}
+    return render_template('admin_places.html', jours=list(zip(range(5), NOMS_JOURS, semaine)),
+                           exceptions=exceptions, occupees=occupees, habituel=habituel,
+                           trop_remplis=jours_trop_remplis(aujourd_hui),
+                           date_choisie=request.args.get('date', ''),
+                           places_max=rc.PLACES_MAX_REGLABLE)
+
+
+@app.route('/admin/places/<int:id>/supprimer', methods=['POST'])
+@login_required
+def supprimer_places_jour(id):
+    exception = CapaciteJour.query.get_or_404(id)
+    jour = exception.date
+    db.session.delete(exception)
+    db.session.commit()
+    flash(f"{rc.date_fr(jour)} : retour au nombre de places habituel ({rc.max_personnes_pour_date(jour)}).", 'success')
+    return redirect(url_for('admin_places'))
+
+
+# ---------------------------------------------------------------------------
+# Vue du jour (accueil par les élèves) et feuille de service du matin
+# ---------------------------------------------------------------------------
+
+def maintenant_bruxelles():
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo('Europe/Brussels'))
+
+
+def service_du_jour(jour_iso):
+    """Tables attendues un jour donne (annulees exclues), par ordre alphabetique."""
+    resas = Reservation.query.filter(Reservation.date == jour_iso,
+                                     Reservation.statut.in_(['en_attente', 'confirmee'])).all()
+    return sorted(resas, key=lambda r: (r.nom or '').strip().lower())
+
+
+def cle_vue_jour(renouveler=False):
+    """Cle secrete du lien « vue du jour ». Elle remplace un mot de passe :
+    les eleves ouvrent la page sans compte admin. On peut la changer."""
+    reglage = db.session.get(Reglage, 'cle_vue_jour')
+    if reglage is None:
+        reglage = Reglage(cle='cle_vue_jour', valeur=secrets.token_urlsafe(12))
+        db.session.add(reglage)
+        db.session.commit()
+    elif renouveler:
+        reglage.valeur = secrets.token_urlsafe(12)
+        db.session.commit()
+    return reglage.valeur
+
+
+def _jour_de_service_voisin(jour, sens):
+    """Jour de semaine precedent (-1) ou suivant (+1)."""
+    voisin = jour + timedelta(days=sens)
+    while voisin.weekday() >= 5:
+        voisin += timedelta(days=sens)
+    return voisin
+
+
+@app.route('/salle/<cle>')
+def vue_du_jour(cle):
+    """Liste du jour pour l'accueil en salle : nom, couverts, remarques.
+    Ni email ni telephone : la page est faite pour etre confiee aux eleves
+    (tablette a l'accueil, ou feuille imprimee)."""
+    if rc.limite_atteinte(f'vue-jour:{rc.adresse_ip()}', 120, 3600) or not hmac.compare_digest(cle, cle_vue_jour()):
+        return render_template('404.html'), 404
+    aujourd_hui = maintenant_bruxelles().date()
+    try:
+        jour = datetime.strptime(request.args.get('date', ''), '%Y-%m-%d').date()
+    except ValueError:
+        jour = aujourd_hui
+    # Seulement aujourd'hui et les trois semaines a venir : pas d'historique des clients.
+    if not aujourd_hui <= jour <= aujourd_hui + timedelta(days=21) or jour.weekday() >= 5:
+        jour = aujourd_hui if aujourd_hui.weekday() < 5 else _jour_de_service_voisin(aujourd_hui, 1)
+    iso = jour.isoformat()
+    resas = service_du_jour(iso)
+    precedent, suivant = _jour_de_service_voisin(jour, -1), _jour_de_service_voisin(jour, 1)
+    reponse = make_response(render_template(
+        'vue_du_jour.html', jour=iso, resas=resas, cle=cle,
+        total=sum(r.personnes for r in resas),
+        maximum=rc.max_personnes_pour_date(iso),
+        ferme=rc.jours_fermes().get(iso),
+        est_aujourd_hui=(jour == aujourd_hui),
+        precedent=precedent.isoformat() if precedent >= aujourd_hui else None,
+        suivant=suivant.isoformat() if suivant <= aujourd_hui + timedelta(days=21) else None))
+    reponse.headers['X-Robots-Tag'] = 'noindex, nofollow'
+    reponse.headers['Cache-Control'] = 'no-store'
+    return reponse
+
+
+@app.route('/admin/vue-du-jour', methods=['GET', 'POST'])
+@login_required
+def admin_vue_du_jour():
+    """Depuis l'admin : ouvre la vue du jour. En POST : change le lien
+    (l'ancien ne fonctionne plus)."""
+    if request.method == 'POST':
+        cle_vue_jour(renouveler=True)
+        flash("Le lien de la vue du jour a été changé : l'ancien ne fonctionne plus. "
+              "Ouvrez la vue et enregistrez la nouvelle adresse sur la tablette.", 'success')
+        return redirect(url_for('reservations_par_date'))
+    return redirect(url_for('vue_du_jour', cle=cle_vue_jour(), date=request.args.get('date') or None))
+
+
+_feuille_service_faite = None   # jour (AAAA-MM-JJ) deja traite par ce processus
+
+
+def feuille_de_service_si_besoin(maintenant=None):
+    """Envoie la feuille de service du jour au restaurant, une seule fois
+    par jour de service, a partir de l'heure reglee (FEUILLE_SERVICE_HEURE).
+    Retourne True si elle vient d'etre envoyee. Plusieurs processus peuvent
+    appeler cette fonction en meme temps : la base sert d'arbitre."""
+    global _feuille_service_faite
+    if not rc.FEUILLE_SERVICE_HEURE or not rc.RESTAURANT_EMAIL:
+        return False
+    maintenant = maintenant or maintenant_bruxelles()
+    jour = maintenant.date().isoformat()
+    heure = maintenant.strftime('%H:%M')
+    if _feuille_service_faite == jour or maintenant.weekday() >= 5:
+        return False
+    if not rc.FEUILLE_SERVICE_HEURE <= heure < rc.FEUILLE_SERVICE_LIMITE:
+        return False
+    if jour in rc.jours_fermes():
+        _feuille_service_faite = jour
+        return False
+    # Un seul processus obtient le droit d'envoyer pour ce jour.
+    try:
+        if db.session.get(Reglage, 'feuille_service') is None:
+            db.session.add(Reglage(cle='feuille_service', valeur=jour))
+            db.session.commit()
+        else:
+            obtenu = Reglage.query.filter(Reglage.cle == 'feuille_service', Reglage.valeur != jour).update(
+                {'valeur': jour}, synchronize_session=False)
+            db.session.commit()
+            if not obtenu:
+                _feuille_service_faite = jour
+                return False
+    except Exception:
+        db.session.rollback()   # un autre processus vient de le faire
+        _feuille_service_faite = jour
+        return False
+    _feuille_service_faite = jour
+    lien = rc.SITE_URL + url_for('vue_du_jour', cle=cle_vue_jour())
+    rc.mail_feuille_service(jour, [donnees_reservation(r) for r in service_du_jour(jour)],
+                            rc.max_personnes_pour_date(jour), lien)
+    return True
+
+
+@app.before_request
+def _feuille_de_service_au_passage():
+    # Premiere visite du matin : on en profite pour envoyer la feuille.
+    if app.config.get('TESTING') or request.endpoint == 'static':
+        return
+    try:
+        feuille_de_service_si_besoin()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Feuille de service : {e}")
+
+
+def _veilleur_feuille_de_service():
+    """Sans visite sur le site, la feuille doit partir quand meme : ce
+    fil d'execution regarde l'heure toutes les cinq minutes."""
+    import time as _time
+    while True:
+        _time.sleep(300)
+        try:
+            with app.app_context(), app.test_request_context():
+                feuille_de_service_si_besoin()
+        except Exception as e:
+            app.logger.error(f"Feuille de service (veilleur) : {e}")
+
+
+import sys as _sys
+import threading as _threading
+if rc.FEUILLE_SERVICE_HEURE and 'pytest' not in _sys.modules:
+    _threading.Thread(target=_veilleur_feuille_de_service, daemon=True).start()
+
+
 @app.context_processor
 def outils_templates():
-    return {'date_fr': rc.date_fr, 'tel_lien': rc.RESTAURANT_TEL_LIEN, 'tel_resto': rc.RESTAURANT_TEL}
+    return {'date_fr': rc.date_fr, 'tel_lien': rc.RESTAURANT_TEL_LIEN, 'tel_resto': rc.RESTAURANT_TEL,
+            'email_contact': rc.CONTACT_EMAIL,
+            'sms_actif': rc.sms_disponible(), 'recoit_sms': rc.recoit_sms}
 
 
 @app.template_filter('heure_locale')
