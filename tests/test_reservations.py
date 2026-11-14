@@ -823,3 +823,55 @@ def test_adresse_de_contact_sur_le_site_et_en_reponse(app, client, admin, mails)
 def test_adresse_de_contact_reglable(app, client, monkeypatch):
     monkeypatch.setattr(rc, 'CONTACT_EMAIL', 'resto@ecole.example')
     assert 'resto@ecole.example' in client.get('/reservation/reserver').get_data(as_text=True)
+
+
+# --- Retouches du 14/11/2026 --------------------------------------------------
+
+def test_brevo_passe_avant_le_smtp(app, monkeypatch):
+    """Railway bloque le SMTP : il ne doit plus être essayé avant Brevo."""
+    appels = []
+    monkeypatch.setattr(rc, 'SMTP_USER', 'quelquun')
+    monkeypatch.setattr(rc, 'SMTP_PASSWORD', MOT_DE_PASSE_TEST)
+    monkeypatch.setattr(rc, 'BREVO_API_KEY', 'cle-factice')
+    monkeypatch.setattr(rc, 'RESEND_API_KEY', '')
+    monkeypatch.setattr(rc, '_envoyer_brevo', lambda *a: appels.append('brevo'))
+    monkeypatch.setattr(rc, '_envoyer_smtp', lambda *a: appels.append('smtp'))
+    ok, canal, erreur = rc.envoyer_email('client@example.org', 'Sujet', '<p>Bonjour</p>')
+    assert (ok, canal, erreur) == (True, 'brevo', None)
+    assert appels == ['brevo']
+
+
+def test_le_smtp_reste_en_secours_si_brevo_echoue(app, monkeypatch):
+    appels = []
+
+    def brevo_en_panne(*a):
+        appels.append('brevo')
+        raise RuntimeError('HTTP Error 401')
+
+    monkeypatch.setattr(rc, 'SMTP_USER', 'quelquun')
+    monkeypatch.setattr(rc, 'SMTP_PASSWORD', MOT_DE_PASSE_TEST)
+    monkeypatch.setattr(rc, 'BREVO_API_KEY', 'cle-factice')
+    monkeypatch.setattr(rc, 'RESEND_API_KEY', '')
+    monkeypatch.setattr(rc, '_envoyer_brevo', brevo_en_panne)
+    monkeypatch.setattr(rc, '_envoyer_smtp', lambda *a: appels.append('smtp'))
+    ok, canal, erreur = rc.envoyer_email('client@example.org', 'Sujet', '<p>Bonjour</p>')
+    assert ok and canal == 'smtp'
+    assert appels == ['brevo', 'smtp']
+
+
+def test_le_formulaire_passe_avant_le_mode_d_emploi(app, client):
+    page = client.get('/reservation/reserver').get_data(as_text=True)
+    assert page.index('id="form-reservation"') < page.index('Comment réserver une table')
+    # Les deux raccourcis restent tout en haut, avant le formulaire.
+    assert page.index('Vous préférez téléphoner') < page.index('id="form-reservation"')
+    assert page.index('/reservation/retrouver') < page.index('id="form-reservation"')
+
+
+def test_heure_d_impression_a_l_heure_de_bruxelles(app, admin, monkeypatch):
+    import main
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    monkeypatch.setattr(main, 'maintenant_bruxelles',
+                        lambda: datetime(2026, 11, 14, 14, 23, tzinfo=ZoneInfo('Europe/Brussels')))
+    page = admin.get('/admin/reservations').get_data(as_text=True)
+    assert 'Imprimé le 14/11/2026 à 14:23' in page

@@ -267,7 +267,7 @@ def afficher_toutes_reservations():
                              reservations=reservations,
                              email=None,
                              statut_actuel=statut,
-                             now=datetime.now(),
+                             now=maintenant_bruxelles(),
                              etats=etat_emails(reservations),
                              etats_sms=etat_sms(reservations) if rc.sms_disponible() else {},
                              groupes_en_attente=groupes_en_attente(),
@@ -322,7 +322,7 @@ def reservations_par_date():
 
         return render_template('admin_reservations_par_date.html',
                              resume=resume,
-                             now=datetime.now())
+                             now=maintenant_bruxelles())
     except Exception as e:
         app.logger.error(f"Erreur lors du regroupement par date: {e}")
         import traceback

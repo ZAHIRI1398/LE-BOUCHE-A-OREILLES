@@ -35,9 +35,9 @@ EMAIL_FROM = os.environ.get('EMAIL_FROM', 'contact@leboucheaoreilles.be')
 # emails : l'admin affiche donc un bandeau rouge tant qu'elle est active.
 TEST_EMAIL_REDIRECT = os.environ.get('TEST_EMAIL_REDIRECT', '')
 
-# Envoi via le SMTP de l'email de l'ecole (gratuit). Si SMTP_USER et
-# SMTP_PASSWORD sont definis, les emails partent par ce canal ; sinon
-# on retombe sur Brevo puis Resend.
+# Envoi via le SMTP de l'email de l'ecole (gratuit). Dernier recours :
+# les emails partent d'abord par Brevo, puis Resend, et seulement ensuite
+# par ce canal si SMTP_USER et SMTP_PASSWORD sont definis.
 # Attention : Railway bloque le SMTP sur les offres Free/Trial/Hobby.
 SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
@@ -310,15 +310,16 @@ def _envoyer_resend(destinataire, sujet, html_content, texte, repondre_a):
 
 def envoyer_email(destinataire, sujet, html_content, texte='', repondre_a=None):
     """Envoie un email par le premier canal configure qui fonctionne
-    (SMTP, puis Brevo, puis Resend). Retourne (ok, canal, erreur)."""
+    (Brevo, puis Resend, puis SMTP en dernier recours : Railway bloque le
+    SMTP sur ses petites offres). Retourne (ok, canal, erreur)."""
     erreurs = []
     canaux = []
-    if SMTP_USER and SMTP_PASSWORD:
-        canaux.append(('smtp', _envoyer_smtp))
     if BREVO_API_KEY:
         canaux.append(('brevo', _envoyer_brevo))
     if RESEND_API_KEY:
         canaux.append(('resend', _envoyer_resend))
+    if SMTP_USER and SMTP_PASSWORD:
+        canaux.append(('smtp', _envoyer_smtp))
 
     for nom_canal, fonction in canaux:
         try:
