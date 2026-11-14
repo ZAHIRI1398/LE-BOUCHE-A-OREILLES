@@ -103,6 +103,17 @@ if not re.match(r'^([01]\d|2[0-3]):[0-5]\d$', FEUILLE_SERVICE_HEURE):
 # Apres cette heure, la feuille n'est plus envoyee (le service est a 11h55).
 FEUILLE_SERVICE_LIMITE = '11:00'
 
+# Rappel par email la veille : chaque client dont la table est confirmee
+# pour le lendemain recoit un email « A demain », avec le bouton pour
+# modifier ou annuler. Il part a partir de cette heure (heure de Bruxelles).
+# Mettre RAPPEL_VEILLE_HEURE=non pour ne pas l'envoyer. Pas de SMS : le
+# rappel doit rester gratuit.
+RAPPEL_VEILLE_HEURE = os.environ.get('RAPPEL_VEILLE_HEURE', '10:00').strip()
+if not re.match(r'^([01]\d|2[0-3]):[0-5]\d$', RAPPEL_VEILLE_HEURE):
+    RAPPEL_VEILLE_HEURE = ''
+# Passe cette heure, on ne l'envoie plus (pas d'email en soiree ou la nuit).
+RAPPEL_VEILLE_LIMITE = '20:00'
+
 # Garde-fous du formulaire public
 # Les habitues reservent parfois 15 ou 20 fois par mois : 40 dates d'un coup (environ 2 mois de service)
 MAX_DATES_PAR_DEMANDE = int(os.environ.get('MAX_DATES_PAR_DEMANDE', '40'))
@@ -116,7 +127,7 @@ EMAIL_SUBJECT = 'Confirmation de votre réservation - Restaurant Le Bouche à Or
 EMAIL_SUBJECT_ANNULATION = 'Annulation de votre réservation - Restaurant Le Bouche à Oreilles'
 EMAIL_SUBJECT_RECEPTION = 'Réception de votre demande de réservation - Restaurant Le Bouche à Oreilles'
 
-TYPES_MAIL_CLIENT = ('reception', 'confirmation', 'annulation', 'modification', 'lien_modification')
+TYPES_MAIL_CLIENT = ('reception', 'confirmation', 'annulation', 'modification', 'lien_modification', 'rappel')
 
 if TEST_EMAIL_REDIRECT:
     print(f"⚠️  TEST_EMAIL_REDIRECT est actif : tous les emails partent vers {TEST_EMAIL_REDIRECT} et AUCUN client ne les reçoit.")
@@ -568,14 +579,16 @@ def _texte_dates(resas):
 def mail_client(type_mail, resas):
     """Email au client pour une ou plusieurs reservations du meme groupe :
     un seul email qui liste les dates. type_mail : reception, confirmation,
-    annulation, modification ou lien_modification."""
+    annulation, modification, lien_modification ou rappel (la veille)."""
     if not resas:
         return
-    # Le SMS part d'abord : il ne depend pas de l'email.
-    try:
-        sms_client(type_mail, resas)
-    except Exception:
-        traceback.print_exc()
+    # Le SMS part d'abord : il ne depend pas de l'email. Jamais de SMS pour
+    # le rappel de la veille : il doit rester gratuit.
+    if type_mail != 'rappel':
+        try:
+            sms_client(type_mail, resas)
+        except Exception:
+            traceback.print_exc()
     premiere = resas[0]
     destinataire = (premiere.get('email') or '').strip()
     reference = premiere['groupe_reference'] if len(resas) > 1 and premiere.get('groupe_reference') else premiere['reference']
@@ -621,6 +634,13 @@ def mail_client(type_mail, resas):
         titre, couleur = 'Votre réservation est modifiée', '#cf7a3e'
         texte_intro = "Votre changement est bien enregistré. Voici votre réservation à jour."
         conclusion = f"<p style=\"margin: 0;\">Un autre changement ? Utilisez le bouton ci-dessus ou appelez-nous au {tel}.</p>"
+    elif type_mail == 'rappel':
+        sujet = 'Rappel : votre table demain - Restaurant Le Bouche à Oreilles'
+        titre, couleur = 'À demain !', '#cf7a3e'
+        texte_intro = f"Petit rappel : nous vous attendons demain, {dates[0]}, à {premiere['heure']}."
+        conclusion = ("<p style=\"margin: 0;\">Un empêchement, ou une personne en plus ou en moins ? "
+                      "Prévenez-nous dès aujourd'hui : utilisez le bouton ci-dessus "
+                      f"ou appelez-nous au {tel}.</p>")
     elif type_mail == 'lien_modification':
         sujet = 'Votre réservation - Restaurant Le Bouche à Oreilles'
         titre, couleur = 'Vous avez déjà une réservation', '#cf7a3e'

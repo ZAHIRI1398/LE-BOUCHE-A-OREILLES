@@ -35,6 +35,7 @@ Ensuite, passer le dépôt en **privé** (GitHub → Settings → General → Da
 | `MAX_DATES_PAR_DEMANDE` | `40` par défaut | Nombre de dates qu'on peut cocher en une demande. |
 | `CONFIRMATION_AUTOMATIQUE` | `1` pour l'activer | Désactivée par défaut (comportement actuel). Voir « Décisions ». |
 | `FEUILLE_SERVICE_HEURE` | `07:30` par défaut | Heure (de Bruxelles) à partir de laquelle la feuille de service du jour part vers `RESTAURANT_EMAIL`. Mettre `non` pour ne pas l'envoyer. |
+| `RAPPEL_VEILLE_HEURE` | `10:00` par défaut | Heure (de Bruxelles) à partir de laquelle part, la veille d'un jour de service, l'email de rappel aux clients dont la table est confirmée pour le lendemain (ajout du 14/11/2026). Jamais de SMS. Pas de rappel pour une réservation prise le jour même, ni pour une adresse qui sert à plusieurs clients différents ce jour-là (réservations encodées par l'équipe). Mettre `non` pour ne pas l'envoyer. |
 | `SMS_ACTIF` | `1` pour activer les SMS | Désactivés par défaut. Voir « SMS » plus bas : il faut d'abord acheter des crédits SMS dans Brevo. |
 | `SMS_EXPEDITEUR` | `LeBouche` par défaut | Nom affiché comme expéditeur du SMS : 11 caractères maximum, lettres et chiffres uniquement. |
 | `SMS_TYPES` | `confirmation,annulation,modification` par défaut | Les cas où un SMS part. Ajouter `reception` pour un SMS dès la demande (un SMS de plus par demande). |

@@ -1281,9 +1281,99 @@ def feuille_de_service_si_besoin(maintenant=None):
     return True
 
 
+_rappel_veille_fait = None   # jour (AAAA-MM-JJ) deja traite par ce processus
+
+
+def reservations_a_rappeler(demain_iso, aujourd_hui):
+    """Tables confirmees de demain dont le client recoit un rappel par email.
+    Sont laissees de cote : les reservations sans adresse, celles prises
+    aujourd'hui (le client vient de recevoir sa confirmation), celles deja
+    rappelees, et les adresses de l'equipe (l'adresse du restaurant, ou une
+    adresse qui sert a plusieurs clients differents ce jour-la : un
+    professeur qui a encode des reservations prises par telephone)."""
+    from zoneinfo import ZoneInfo
+    from datetime import timezone
+    resas = Reservation.query.filter(Reservation.date == demain_iso,
+                                     Reservation.statut == 'confirmee').all()
+    if not resas:
+        return []
+    deja = {j.reference for j in EmailEnvoi.query.filter(
+        EmailEnvoi.type_mail == 'rappel', EmailEnvoi.statut == 'envoye',
+        EmailEnvoi.reference.in_([r.reference for r in resas]))}
+    equipe = {a.strip().lower() for a in (rc.RESTAURANT_EMAIL, rc.CONTACT_EMAIL) if a}
+    par_adresse = {}
+    for r in resas:
+        adresse = (r.email or '').strip().lower()
+        if adresse and adresse not in equipe:
+            par_adresse.setdefault(adresse, []).append(r)
+    a_rappeler = []
+    for groupe in par_adresse.values():
+        if len({(r.nom or '').strip().lower() for r in groupe}) > 1:
+            continue
+        for r in groupe:
+            if r.reference in deja:
+                continue
+            if r.created_at and r.created_at.replace(tzinfo=timezone.utc).astimezone(
+                    ZoneInfo('Europe/Brussels')).date() == aujourd_hui:
+                continue
+            a_rappeler.append(r)
+    return sorted(a_rappeler, key=lambda r: r.id)
+
+
+def _envoyer_rappels(liste):
+    for donnees in liste:
+        try:
+            rc.mail_client('rappel', [donnees])
+        except Exception as e:
+            app.logger.error(f"Rappel de la veille ({donnees.get('reference')}) : {e}")
+
+
+def rappel_veille_si_besoin(maintenant=None):
+    """La veille d'un jour de service, a partir de l'heure reglee
+    (RAPPEL_VEILLE_HEURE), envoie un email de rappel aux clients dont la
+    table est confirmee pour le lendemain. Une seule fois par jour : la base
+    sert d'arbitre, comme pour la feuille de service. Retourne le nombre de
+    rappels lances."""
+    global _rappel_veille_fait
+    if not rc.RAPPEL_VEILLE_HEURE:
+        return 0
+    maintenant = maintenant or maintenant_bruxelles()
+    jour = maintenant.date().isoformat()
+    if _rappel_veille_fait == jour:
+        return 0
+    if not rc.RAPPEL_VEILLE_HEURE <= maintenant.strftime('%H:%M') < rc.RAPPEL_VEILLE_LIMITE:
+        return 0
+    demain = maintenant.date() + timedelta(days=1)
+    if demain.weekday() >= 5 or demain.isoformat() in rc.jours_fermes():
+        _rappel_veille_fait = jour
+        return 0
+    # Un seul processus obtient le droit d'envoyer pour ce jour.
+    try:
+        if db.session.get(Reglage, 'rappel_veille') is None:
+            db.session.add(Reglage(cle='rappel_veille', valeur=jour))
+            db.session.commit()
+        else:
+            obtenu = Reglage.query.filter(Reglage.cle == 'rappel_veille', Reglage.valeur != jour).update(
+                {'valeur': jour}, synchronize_session=False)
+            db.session.commit()
+            if not obtenu:
+                _rappel_veille_fait = jour
+                return 0
+    except Exception:
+        db.session.rollback()   # un autre processus vient de le faire
+        _rappel_veille_fait = jour
+        return 0
+    _rappel_veille_fait = jour
+    liste = [donnees_reservation(r) for r in reservations_a_rappeler(demain.isoformat(), maintenant.date())]
+    if liste:
+        rc.en_arriere_plan(_envoyer_rappels, liste)
+    return len(liste)
+
+
 @app.before_request
 def _feuille_de_service_au_passage():
-    # Premiere visite du matin : on en profite pour envoyer la feuille.
+    # Premiere visite du matin : on en profite pour envoyer la feuille,
+    # et plus tard dans la journee les rappels pour le lendemain.
     if app.config.get('TESTING') or request.endpoint == 'static':
         return
     try:
@@ -1291,6 +1381,11 @@ def _feuille_de_service_au_passage():
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Feuille de service : {e}")
+    try:
+        rappel_veille_si_besoin()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Rappel de la veille : {e}")
 
 
 def _veilleur_feuille_de_service():
@@ -1302,13 +1397,14 @@ def _veilleur_feuille_de_service():
         try:
             with app.app_context(), app.test_request_context():
                 feuille_de_service_si_besoin()
+                rappel_veille_si_besoin()
         except Exception as e:
             app.logger.error(f"Feuille de service (veilleur) : {e}")
 
 
 import sys as _sys
 import threading as _threading
-if rc.FEUILLE_SERVICE_HEURE and 'pytest' not in _sys.modules:
+if (rc.FEUILLE_SERVICE_HEURE or rc.RAPPEL_VEILLE_HEURE) and 'pytest' not in _sys.modules:
     _threading.Thread(target=_veilleur_feuille_de_service, daemon=True).start()
 
 

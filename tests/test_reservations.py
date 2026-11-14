@@ -889,3 +889,100 @@ def test_bandeau_cookies_sur_une_ligne(app, client):
     page = client.get('/accueil').get_data(as_text=True)
     assert 'cookies techniques' in page
     assert 'rejectCookies()"' not in page        # un seul bouton : OK
+
+
+# --- Rappel par email la veille ------------------------------------------------
+
+def _veille_de_service(app, monkeypatch, tables):
+    """Un mardi à 10 h 30, avec des tables pour le mercredi. `tables` :
+    liste de dictionnaires (nom, email, statut, et au besoin created_at)."""
+    import main
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    maintenant = datetime(2026, 11, 17, 10, 30, tzinfo=ZoneInfo('Europe/Brussels'))   # un mardi
+    demain = '2026-11-18'
+    monkeypatch.setattr(main, '_rappel_veille_fait', None)
+    with app.app_context():
+        for i, t in enumerate(tables, start=1):
+            db.session.add(Reservation(
+                reference=f'Table{i}-{demain}', groupe_reference=f'Groupe-r{i}', nom=t['nom'],
+                email=t.get('email', ''), telephone='0470 12 34 56', date=t.get('date', demain),
+                heure='11:55', personnes=t.get('personnes', 2), statut=t.get('statut', 'confirmee'),
+                created_at=t.get('created_at', datetime(2026, 11, 10, 9, 0))))
+        db.session.commit()
+    return maintenant, demain
+
+
+def test_rappel_la_veille_une_seule_fois(app, mails, monkeypatch):
+    import main
+    maintenant, demain = _veille_de_service(app, monkeypatch, [{'nom': 'Jeanne Dupont', 'email': 'jeanne@example.org'}])
+    with app.test_request_context():
+        assert main.rappel_veille_si_besoin(maintenant.replace(hour=9, minute=0)) == 0     # trop tôt
+        assert mails.envoyes == []
+        assert main.rappel_veille_si_besoin(maintenant) == 1
+        assert main.rappel_veille_si_besoin(maintenant.replace(hour=15)) == 0               # déjà parti
+        monkeypatch.setattr(main, '_rappel_veille_fait', None)                              # autre processus
+        assert main.rappel_veille_si_besoin(maintenant.replace(hour=15)) == 0
+    recus = mails.pour('jeanne@example.org')
+    assert len(recus) == 1
+    assert recus[0]['sujet'].startswith('Rappel : votre table demain')
+    assert 'À demain' in recus[0]['html'] and rc.date_fr(demain) in recus[0]['html']
+    assert '/reservation/modifier/' in recus[0]['html'] and 'Modifier ou annuler ma réservation' in recus[0]['texte']
+    with app.app_context():
+        assert EmailEnvoi.query.filter_by(type_mail='rappel', statut='envoye').count() == 1
+
+
+def test_rappel_seulement_pour_les_tables_confirmees_des_clients(app, mails, monkeypatch):
+    import main
+    from datetime import datetime
+    maintenant, demain = _veille_de_service(app, monkeypatch, [
+        {'nom': 'Confirmée', 'email': 'oui@example.org'},
+        {'nom': 'En attente', 'email': 'attente@example.org', 'statut': 'en_attente'},
+        {'nom': 'Annulée', 'email': 'annulee@example.org', 'statut': 'annulee'},
+        {'nom': 'Sans adresse', 'email': ''},
+        {'nom': 'Autre jour', 'email': 'autre@example.org', 'date': '2026-11-19'},
+        {'nom': 'Réservée ce matin', 'email': 'matin@example.org', 'created_at': datetime(2026, 11, 17, 7, 30)},
+        # Un professeur a encodé deux clients avec sa propre adresse : pas de rappel pour lui.
+        {'nom': 'Client A', 'email': 'prof@example.org'},
+        {'nom': 'Client B', 'email': 'Prof@example.org'},
+        {'nom': 'Encodée par le resto', 'email': 'resto@example.org'},
+    ])
+    with app.test_request_context():
+        assert main.rappel_veille_si_besoin(maintenant) == 1
+    assert [m['a'] for m in mails.envoyes] == ['oui@example.org']
+
+
+def test_pas_de_rappel_avant_un_week_end_un_jour_ferme_ou_le_soir(app, mails, monkeypatch):
+    import main
+    maintenant, demain = _veille_de_service(app, monkeypatch, [{'nom': 'Jeanne Dupont', 'email': 'jeanne@example.org'}])
+    vendredi = maintenant + timedelta(days=3)
+    with app.test_request_context():
+        assert main.rappel_veille_si_besoin(vendredi) == 0                                  # demain = samedi
+        monkeypatch.setattr(main, '_rappel_veille_fait', None)
+        assert main.rappel_veille_si_besoin(maintenant.replace(hour=21)) == 0               # trop tard
+        with app.app_context():
+            db.session.add(JourFerme(date=demain, motif='Stage'))
+            db.session.commit()
+        assert main.rappel_veille_si_besoin(maintenant) == 0
+        with app.app_context():
+            JourFerme.query.delete()
+            db.session.commit()
+        monkeypatch.setattr(main, '_rappel_veille_fait', None)
+        monkeypatch.setattr(rc, 'RAPPEL_VEILLE_HEURE', '')                                  # RAPPEL_VEILLE_HEURE=non
+        assert main.rappel_veille_si_besoin(maintenant) == 0
+    assert mails.envoyes == []
+
+
+def test_le_rappel_ne_part_jamais_par_sms(app, mails, monkeypatch):
+    import main
+    sms = []
+    monkeypatch.setattr(rc, 'SMS_ACTIF', True)
+    monkeypatch.setattr(rc, 'SMS_TYPES', ('confirmation', 'annulation', 'modification', 'rappel'))
+    monkeypatch.setattr(rc, 'envoyer_sms', lambda numero, texte: sms.append(numero) or (True, None))
+    maintenant, demain = _veille_de_service(app, monkeypatch, [{'nom': 'Jeanne Dupont', 'email': 'jeanne@example.org'}])
+    with app.app_context():
+        Reservation.query.update({'sms': True})
+        db.session.commit()
+    with app.test_request_context():
+        assert main.rappel_veille_si_besoin(maintenant) == 1
+    assert len(mails.pour('jeanne@example.org')) == 1 and sms == []
