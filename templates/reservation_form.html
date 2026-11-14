@@ -1,6 +1,6 @@
 <!-- templates/reservation.html -->
 {% extends "base.html" %}
-{% block title %}Réserver une Table - BOUCHE A OREILLE{% endblock %}
+{% block title %}Réserver une table - Le Bouche à Oreilles{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -56,8 +56,11 @@
     }
     /* Guide étapes */
     .guide-steps {
-        background: #f8f5f1; border-radius: 12px; padding: 1.5rem 1.75rem; margin-bottom: 1.5rem;
+        background: #f8f5f1; border-radius: 12px; padding: 1.5rem 1.75rem; margin-top: 1.5rem;
     }
+    .raccourcis { background: #f8f5f1; border-radius: 12px; padding: 1rem 1.25rem .25rem; margin-bottom: 1.25rem; }
+    .raccourcis .appel-direct { margin: 0 0 .75rem; }
+    .rappel-apres { font-size: 1.05rem; }
     .guide-steps h2 { font-size: 1.3rem; color: #4a2f1f; margin-bottom: 1rem; }
     .step-item { display: flex; gap: .85rem; margin-bottom: .85rem; align-items: flex-start; }
     .step-item:last-child { margin-bottom: 0; }
@@ -99,60 +102,14 @@
 <div class="container my-5">
     <div class="row justify-content-center">
         <div class="col-lg-8">
-            <!-- Guide : comment réserver -->
-            <div class="guide-steps">
-                <h2><i class="fas fa-info-circle me-2"></i>Comment réserver une table ?</h2>
+            <!-- Raccourcis : téléphoner, ou changer une réservation existante -->
+            <div class="raccourcis">
                 <p class="appel-direct">Vous préférez téléphoner ?
                     <a href="tel:{{ tel_lien }}" class="btn btn-outline-primary btn-lg ms-1"><i class="fas fa-phone me-2"></i>{{ telephone_resto }}</a>
                 </p>
                 <p class="appel-direct">Vous avez déjà réservé et vous voulez changer ou annuler ?
                     <a href="{{ url_for('reservation.retrouver') }}" class="btn btn-outline-primary btn-lg ms-1"><i class="fas fa-pen me-2"></i>Modifier ou annuler</a>
                 </p>
-                <div class="step-item">
-                    <div class="step-num">1</div>
-                    <div class="step-text">
-                        <strong>Remplissez vos coordonnées</strong><br>
-                        {% if sms_actif %}
-                        <small>Indiquez votre nom et votre numéro de téléphone. L'adresse email n'est pas obligatoire si vous donnez un numéro de GSM.</small>
-                        {% else %}
-                        <small>Indiquez votre nom, votre email et votre numéro de téléphone.</small>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-num">2</div>
-                    <div class="step-text">
-                        <strong>Choisissez le nombre de personnes </strong><br>
-                        <small>Sélectionnez le nombre de convives. Le service se fait à <strong>11h55</strong>.</small>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-num">3</div>
-                    <div class="step-text">
-                        <strong>Sélectionnez une ou plusieurs dates dans le calendrier</strong><br>
-                        <small>Naviguez avec les flèches ‹ › pour changer de mois. Cliquez sur les dates souhaitées (en orange). Vous pouvez choisir <strong>plusieurs dates</strong> en une seule demande (jusqu'à {{ max_dates }}). Pour prendre par exemple tous les jeudis du mois, cliquez sur la lettre « J » en haut du calendrier. Les week-ends et jours passés ne sont pas disponibles.</small>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-num">4</div>
-                    <div class="step-text">
-                        <strong>Ajoutez une demande spéciale si besoin (optionnel)</strong><br>
-                        <small>Allergie, table près de la fenêtre, occasion particulière…</small>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-num">5</div>
-                    <div class="step-text">
-                        <strong>Cliquez sur « Réserver maintenant »</strong><br>
-                        {% if confirmation_automatique %}
-                        <small>S'il reste de la place, votre table est <strong>réservée tout de suite</strong> et vous recevez la <strong>confirmation</strong> par email{% if sms_actif %}, ou par SMS si vous cochez la case sous votre numéro de GSM{% endif %} (pour plus de 10 personnes, notre équipe vous recontacte).</small>
-                        {% else %}
-                        <small>Vous recevrez d'abord{% if sms_actif %}, si vous avez donné votre adresse,{% endif %} un email de <strong>réception de votre demande</strong> (ce n'est pas encore une confirmation). Notre équipe valide ensuite votre réservation et vous envoie la <strong>confirmation</strong> par email{% if sms_actif %}, ou par SMS si vous cochez la case sous votre numéro de GSM{% endif %}.</small>
-                        {% endif %}
-                        <br><small>Un changement ensuite (nombre de personnes, annulation) ? Utilisez le bouton « Modifier ou annuler ma réservation » de votre email : inutile de refaire une réservation.</small>
-                        <br><small>Pas d'email ? Regardez dans le dossier « courrier indésirable » ou appelez-nous au <strong>{{ telephone_resto }}</strong>. Vous pouvez aussi réserver par téléphone.</small>
-                    </div>
-                </div>
             </div>
             <div class="card shadow">
                 <div class="card-header bg-primary text-white">
@@ -246,7 +203,57 @@
                                 <i class="fas fa-calendar-check me-2"></i>Réserver maintenant
                             </button>
                         </div>
+                        <p class="rappel-apres text-center text-muted mt-3 mb-0">Vous recevrez un email juste après votre demande. Besoin d'aide ? Le mode d'emploi se trouve en dessous.</p>
                     </form>
+                </div>
+            </div>
+            <!-- Guide : comment réserver (sous le formulaire, pour ne pas le repousser hors de l'écran) -->
+            <div class="guide-steps">
+                <h2><i class="fas fa-info-circle me-2"></i>Comment réserver une table ?</h2>
+                <div class="step-item">
+                    <div class="step-num">1</div>
+                    <div class="step-text">
+                        <strong>Remplissez vos coordonnées</strong><br>
+                        {% if sms_actif %}
+                        <small>Indiquez votre nom et votre numéro de téléphone. L'adresse email n'est pas obligatoire si vous donnez un numéro de GSM.</small>
+                        {% else %}
+                        <small>Indiquez votre nom, votre email et votre numéro de téléphone.</small>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-num">2</div>
+                    <div class="step-text">
+                        <strong>Choisissez le nombre de personnes </strong><br>
+                        <small>Sélectionnez le nombre de convives. Le service se fait à <strong>11h55</strong>.</small>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-num">3</div>
+                    <div class="step-text">
+                        <strong>Sélectionnez une ou plusieurs dates dans le calendrier</strong><br>
+                        <small>Naviguez avec les flèches ‹ › pour changer de mois. Cliquez sur les dates souhaitées (en orange). Vous pouvez choisir <strong>plusieurs dates</strong> en une seule demande (jusqu'à {{ max_dates }}). Pour prendre par exemple tous les jeudis du mois, cliquez sur la lettre « J » en haut du calendrier. Les week-ends et jours passés ne sont pas disponibles.</small>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-num">4</div>
+                    <div class="step-text">
+                        <strong>Ajoutez une demande spéciale si besoin (optionnel)</strong><br>
+                        <small>Allergie, table près de la fenêtre, occasion particulière…</small>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-num">5</div>
+                    <div class="step-text">
+                        <strong>Cliquez sur « Réserver maintenant »</strong><br>
+                        {% if confirmation_automatique %}
+                        <small>S'il reste de la place, votre table est <strong>réservée tout de suite</strong> et vous recevez la <strong>confirmation</strong> par email{% if sms_actif %}, ou par SMS si vous cochez la case sous votre numéro de GSM{% endif %} (pour plus de 10 personnes, notre équipe vous recontacte).</small>
+                        {% else %}
+                        <small>Vous recevrez d'abord{% if sms_actif %}, si vous avez donné votre adresse,{% endif %} un email de <strong>réception de votre demande</strong> (ce n'est pas encore une confirmation). Notre équipe valide ensuite votre réservation et vous envoie la <strong>confirmation</strong> par email{% if sms_actif %}, ou par SMS si vous cochez la case sous votre numéro de GSM{% endif %}.</small>
+                        {% endif %}
+                        <br><small>Un changement ensuite (nombre de personnes, annulation) ? Utilisez le bouton « Modifier ou annuler ma réservation » de votre email : inutile de refaire une réservation.</small>
+                        <br><small>Pas d'email ? Regardez dans le dossier « courrier indésirable » ou appelez-nous au <strong>{{ telephone_resto }}</strong>. Vous pouvez aussi réserver par téléphone.</small>
+                    </div>
                 </div>
             </div>
         </div>

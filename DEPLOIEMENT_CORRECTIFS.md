@@ -40,7 +40,7 @@ Ensuite, passer le dépôt en **privé** (GitHub → Settings → General → Da
 | `SMS_TYPES` | `confirmation,annulation,modification` par défaut | Les cas où un SMS part. Ajouter `reception` pour un SMS dès la demande (un SMS de plus par demande). |
 | `SMS_PRIX_UNITAIRE` | `0.095` par défaut | Prix d'un SMS, pour l'estimation affichée dans l'admin. À ajuster selon le tarif du compte. |
 | `TEST_EMAIL_REDIRECT` | **vide ou supprimée** | Si elle est remplie, aucun client ne reçoit ses emails. L'admin affiche maintenant un bandeau rouge dans ce cas. |
-| `SMTP_USER` / `SMTP_PASSWORD` | à supprimer sur l'offre Hobby | Railway bloque le SMTP sur les offres Free, Trial et Hobby : chaque email perd 15 secondes avant de passer au canal suivant. |
+| `SMTP_USER` / `SMTP_PASSWORD` | facultatif, dernier recours | Railway bloque le SMTP sur les offres Free, Trial et Hobby. Depuis le 14/11/2026, ce canal n'est essayé qu'après Brevo et Resend : il ne ralentit plus rien et peut être retiré. |
 | `BREVO_API_KEY` / `BREVO_FROM` | clé Brevo + expéditeur validé | Offre gratuite : 300 emails par jour, largement assez. Authentifier le domaine `leboucheaoreilles.be` dans Brevo (SPF, DKIM, DMARC) pour que les emails n'arrivent pas en indésirables. |
 | `RESEND_API_KEY` | facultatif, en secours | L'offre gratuite (3 000 par mois, 100 par jour) suffit aussi. Une offre payante n'est pas nécessaire au volume du restaurant. |
 
@@ -70,7 +70,7 @@ Le site envoyait un email par date, à la réception puis à la confirmation : u
 
 À ce rythme, l'offre gratuite de Brevo (300 emails par jour) suffit largement, et celle de Resend (3 000 par mois, 100 par jour) peut rester en secours. Aucune offre payante n'est nécessaire : si un abonnement Resend ou Brevo court encore, il peut être arrêté une fois ces correctifs en ligne. Le compteur en haut de la liste des réservations (« Emails envoyés : N aujourd'hui, N ce mois-ci ») permet de le vérifier.
 
-Ordre des canaux : SMTP (à retirer sur Railway Hobby), puis Brevo, puis Resend. Pour que Brevo passe en premier, il suffit que `BREVO_API_KEY` et `BREVO_FROM` soient définis.
+Ordre des canaux : Brevo, puis Resend, puis SMTP en dernier recours.
 
 ## Vue du jour pour les élèves (commit 5)
 
