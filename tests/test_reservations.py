@@ -875,3 +875,20 @@ def test_heure_d_impression_a_l_heure_de_bruxelles(app, admin, monkeypatch):
                         lambda: datetime(2026, 11, 14, 14, 23, tzinfo=ZoneInfo('Europe/Brussels')))
     page = admin.get('/admin/reservations').get_data(as_text=True)
     assert 'Imprimé le 14/11/2026 à 14:23' in page
+
+
+def test_bouton_admin_discret_pour_les_clients(app, client, admin):
+    page = client.get('/accueil').get_data(as_text=True)
+    haut, pied = page.split('<footer', 1)
+    assert '/admin/login' not in haut            # plus de bouton « Admin » dans le menu du haut
+    assert '/admin/login' in pied and 'Espace équipe' in pied
+    # Une fois connectée, l'équipe garde ses raccourcis en haut de page.
+    page = admin.get('/accueil').get_data(as_text=True)
+    haut = page.split('<footer', 1)[0]
+    assert 'Déconnexion' in haut and '/admin/reservations' in haut
+
+
+def test_bandeau_cookies_sur_une_ligne(app, client):
+    page = client.get('/accueil').get_data(as_text=True)
+    assert 'cookies techniques' in page
+    assert 'rejectCookies()"' not in page        # un seul bouton : OK
