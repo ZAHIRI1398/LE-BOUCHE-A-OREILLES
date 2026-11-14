@@ -875,3 +875,17 @@ def test_heure_d_impression_a_l_heure_de_bruxelles(app, admin, monkeypatch):
                         lambda: datetime(2026, 11, 14, 14, 23, tzinfo=ZoneInfo('Europe/Brussels')))
     page = admin.get('/admin/reservations').get_data(as_text=True)
     assert 'Imprimé le 14/11/2026 à 14:23' in page
+
+
+def test_bouton_admin_reste_en_haut_de_page(app, client, admin):
+    """Demande de Fred : l'équipe retrouve le bouton « Admin » là où il a toujours été."""
+    haut = client.get('/accueil').get_data(as_text=True).split('<footer', 1)[0]
+    assert '/admin/login' in haut and 'Admin' in haut
+    haut = admin.get('/accueil').get_data(as_text=True).split('<footer', 1)[0]
+    assert 'Déconnexion' in haut
+
+
+def test_bandeau_cookies_sur_une_ligne(app, client):
+    page = client.get('/accueil').get_data(as_text=True)
+    assert 'cookies techniques' in page
+    assert 'rejectCookies()"' not in page        # un seul bouton : OK
