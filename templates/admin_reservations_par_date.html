@@ -52,6 +52,15 @@
                         <a class="nav-link active" href="{{ url_for('reservations_par_date') }}">Par date</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('ajouter_reservation_admin') }}"><i class="bi bi-telephone-plus"></i> Ajouter (téléphone)</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_fermetures') }}"><i class="bi bi-calendar-x"></i> Jours fermés</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_places') }}"><i class="bi bi-people"></i> Places</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('admin_menu') }}">Menu</a>
                     </li>
                 </ul>
@@ -67,9 +76,17 @@
         <div class="admin-container">
             <div class="d-flex justify-content-between align-items-center mb-4 no-print">
                 <h1>Réservations par date</h1>
-                <button onclick="window.print()" class="btn btn-outline-secondary">
-                    <i class="bi bi-printer"></i> Imprimer
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <a href="{{ url_for('admin_vue_du_jour') }}" target="_blank" class="btn btn-primary" title="Liste du jour pour l'accueil par les élèves : noms, couverts, remarques (ni email ni téléphone)">
+                        <i class="bi bi-tablet"></i> Vue du jour (élèves)
+                    </a>
+                    <form method="POST" action="{{ url_for('admin_vue_du_jour') }}" onsubmit="return confirm('Changer le lien de la vue du jour ? L\'ancien lien ne fonctionnera plus.');">
+                        <button type="submit" class="btn btn-outline-secondary" title="À faire si le lien a circulé en dehors de l'équipe"><i class="bi bi-arrow-repeat"></i> Nouveau lien</button>
+                    </form>
+                    <button onclick="window.print()" class="btn btn-outline-secondary">
+                        <i class="bi bi-printer"></i> Imprimer
+                    </button>
+                </div>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
@@ -93,10 +110,13 @@
                 {% for jour in resume %}
                 <div class="date-card">
                     <div class="date-header">
-                        <h3><i class="bi bi-calendar-week me-2"></i>{{ jour.date }}</h3>
+                        <h3><i class="bi bi-calendar-week me-2"></i>{{ date_fr(jour.date) }}
+                            <a href="{{ url_for('ajouter_reservation_admin', date=jour.date) }}" class="btn btn-sm btn-outline-light ms-2 no-print" title="Ajouter une réservation prise par téléphone pour ce jour"><i class="bi bi-telephone-plus"></i></a>
+                        </h3>
                         <div class="date-stats">
                             <span class="stat-badge"><i class="bi bi-table"></i> {{ jour.nb_tables }} table(s)</span>
-                            <span class="stat-badge"><i class="bi bi-people"></i> {{ jour.nb_personnes }} personne(s)</span>
+                            <span class="stat-badge" {% if jour.nb_personnes > jour.maximum %}style="background: #ffc107; color: #212529;"{% endif %}><i class="bi bi-people"></i> {{ jour.nb_personnes }} / {{ jour.maximum }} places</span>
+                            <a href="{{ url_for('admin_places', date=jour.date) }}" class="btn btn-sm btn-outline-light no-print" title="Changer le nombre de places de ce jour"><i class="bi bi-sliders"></i></a>
                             <span class="stat-badge"><i class="bi bi-check-circle"></i> {{ jour.confirmees }} confirmée(s)</span>
                             <span class="stat-badge"><i class="bi bi-hourglass-split"></i> {{ jour.en_attente }} en attente</span>
                         </div>
@@ -118,8 +138,8 @@
                                 {% for r in jour.reservations %}
                                 <tr>
                                     <td><small class="text-muted">{{ r.reference }}</small></td>
-                                    <td>{{ r.nom }}</td>
-                                    <td>{{ r.email }}</td>
+                                    <td>{% if r.source == 'telephone' %}<i class="bi bi-telephone text-primary" title="Prise par téléphone"></i> {% endif %}{{ r.nom }}{% if r.message %}<br><small class="text-muted">{{ r.message }}</small>{% endif %}</td>
+                                    <td>{{ r.email or '-' }}</td>
                                     <td>{{ r.telephone or '-' }}</td>
                                     <td>{{ r.heure }}</td>
                                     <td>{{ r.personnes }}</td>

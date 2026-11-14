@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Ma réservation - Le Bouche à Oreilles{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Page pensée pour une clientèle âgée : grands caractères, gros boutons, une action par bloc */
+    .page-lisible { max-width: 760px; font-size: 1.25rem; line-height: 1.55; }
+    .page-lisible h1 { font-size: 2.1rem; font-weight: 700; color: #4a2f1f; }
+    .page-lisible .alert { font-size: 1.2rem; }
+    .carte-date { border: 2px solid #e3d5c5; border-radius: 14px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; background: #fff; }
+    .carte-date .jour { font-size: 1.6rem; font-weight: 700; color: #4a2f1f; }
+    .etat { font-size: 1.15rem; font-weight: 700; margin-top: .25rem; }
+    .etat.ok { color: #1e7e34; }
+    .etat.attente { color: #b35c00; }
+    .etat.annulee { color: #c82333; }
+    .etat.passee { color: #6c757d; }
+    .libelle { font-weight: 600; margin-top: 1rem; display: block; }
+    .compteur { display: flex; align-items: center; gap: .75rem; margin: .5rem 0 .75rem; }
+    .compteur button { width: 64px; height: 64px; font-size: 2.2rem; font-weight: 700; border-radius: 12px;
+                       border: 2px solid #cf7a3e; background: #fff; color: #cf7a3e; line-height: 1; }
+    .compteur button:active { background: #f1e7da; }
+    .compteur input { width: 120px; height: 64px; font-size: 2rem; text-align: center; font-weight: 700;
+                      border: 2px solid #ced4da; border-radius: 12px; }
+    .btn-annuler { font-size: 1.2rem; padding: .75rem; border-radius: 12px; border-width: 2px; }
+    .carte-tout { background: #f8f5f1; }
+    .btn-enregistrer { font-size: 1.5rem; padding: 1rem; border-radius: 12px; }
+    .aide-tel { font-size: 1.3rem; background: #f8f5f1; border-radius: 12px; padding: 1rem 1.25rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-5 page-lisible">
+    {% if introuvable %}
+        <h1>Lien non valide</h1>
+        <p>Ce lien ne correspond à aucune réservation. Pour toute question, appelez-nous au <strong>{{ telephone_resto }}</strong>.</p>
+        <p><a href="{{ url_for('reservation.retrouver') }}" class="btn btn-outline-primary btn-lg">Recevoir un nouveau lien</a></p>
+    {% else %}
+        <h1>Ma réservation</h1>
+        {% if nb_modifiables %}
+        <p>Bonjour {{ resas[0].nom }}. Pour changer le nombre de personnes, utilisez les boutons − et +, puis cliquez sur le bouton vert « Enregistrer » en bas de la page.</p>
+        {% else %}
+        <p>Bonjour {{ resas[0].nom }}. Pour tout changement, appelez-nous au <strong>{{ telephone_resto }}</strong>.</p>
+        {% endif %}
+
+        <form method="POST">
+            {% if nb_modifiables > 1 %}
+            <div class="carte-date carte-tout">
+                <div class="jour">Toutes vos dates en une fois</div>
+                <label class="libelle" for="p_tout">Même nombre de personnes pour chaque date</label>
+                <div class="compteur">
+                    <button type="button" aria-label="Une personne de moins" onclick="changer('p_tout', -1)">−</button>
+                    <input type="number" id="p_tout" value="{{ personnes_defaut }}" min="1" max="{{ groupe_max }}" inputmode="numeric">
+                    <button type="button" aria-label="Une personne de plus" onclick="changer('p_tout', 1)">+</button>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-lg w-100 btn-annuler" onclick="appliquerPartout()">Mettre ce nombre à toutes les dates</button>
+                <p class="mt-2 mb-0" id="rappel-enregistrer" style="display: none;">C'est fait ci-dessous. Cliquez ensuite sur le bouton vert « Enregistrer » en bas de la page.</p>
+            </div>
+            {% endif %}
+            {% for r in resas %}
+            <div class="carte-date">
+                <div class="jour">{{ date_fr(r.date) }} à {{ r.heure }}</div>
+                {% if r.statut == 'annulee' %}
+                    <div class="etat annulee">Annulée</div>
+                {% elif r.date < aujourd_hui %}
+                    <div class="etat passee">Date passée</div>
+                {% elif r.statut == 'confirmee' %}
+                    <div class="etat ok">✓ Confirmée, {{ r.personnes }} personne{{ 's' if r.personnes > 1 }}</div>
+                {% else %}
+                    <div class="etat attente">En attente de confirmation par notre équipe, {{ r.personnes }} personne{{ 's' if r.personnes > 1 }}</div>
+                {% endif %}
+
+                {% if r.statut != 'annulee' and r.date > aujourd_hui %}
+                    <label class="libelle" for="p{{ r.id }}">Nombre de personnes</label>
+                    <div class="compteur">
+                        <button type="button" aria-label="Une personne de moins" onclick="changer('p{{ r.id }}', -1)">−</button>
+                        <input type="number" id="p{{ r.id }}" name="personnes_{{ r.id }}" value="{{ r.personnes }}"
+                               min="1" max="{{ groupe_max }}" inputmode="numeric">
+                        <button type="button" aria-label="Une personne de plus" onclick="changer('p{{ r.id }}', 1)">+</button>
+                    </div>
+                    <button type="submit" name="annuler_{{ r.id }}" value="1" class="btn btn-outline-danger btn-lg w-100 mt-1 btn-annuler"
+                            onclick="return confirm('Annuler votre réservation du {{ date_fr(r.date) }} ?');">Annuler ce jour-là</button>
+                {% elif r.statut != 'annulee' and r.date == aujourd_hui %}
+                    <p class="mt-2 mb-0">C'est aujourd'hui : pour un changement, appelez-nous au <strong>{{ telephone_resto }}</strong>.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            {% if nb_modifiables %}
+            <button type="submit" class="btn btn-success w-100 btn-enregistrer">Enregistrer le nombre de personnes</button>
+            {% endif %}
+            {% if nb_modifiables > 1 %}
+            <button type="submit" name="annuler_tout" value="1" class="btn btn-outline-danger btn-lg w-100 mt-3 btn-annuler"
+                    onclick="return confirm('Annuler toutes vos dates ?');">Annuler toutes mes dates</button>
+            {% endif %}
+        </form>
+
+        <p class="aide-tel mt-4">
+            Pour changer de jour, annulez ce jour-là puis faites une nouvelle réservation, ou appelez-nous au
+            <strong>{{ telephone_resto }}</strong>. Au-delà de {{ max_en_ligne }} personnes, notre équipe confirme elle-même la réservation.
+            <br><a href="tel:{{ tel_lien }}" class="btn btn-primary btn-lg mt-3"><i class="fas fa-phone me-2"></i>Appeler le restaurant</a>
+        </p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function appliquerPartout() {
+    const valeur = document.getElementById('p_tout').value;
+    document.querySelectorAll('input[name^="personnes_"]').forEach(champ => { champ.value = valeur; });
+    document.getElementById('rappel-enregistrer').style.display = 'block';
+}
+function changer(id, ecart) {
+    const champ = document.getElementById(id);
+    const valeur = (parseInt(champ.value, 10) || 1) + ecart;
+    champ.value = Math.max(1, Math.min(parseInt(champ.max, 10), valeur));
+}
+</script>
+{% endblock %}

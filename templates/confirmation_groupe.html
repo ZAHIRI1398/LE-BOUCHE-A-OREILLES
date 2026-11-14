@@ -1,6 +1,14 @@
 <!-- templates/confirmation_groupe.html -->
 {% extends "base.html" %}
 {% block title %}Confirmation de Réservation - BOUCHE A OREILLE{% endblock %}
+{% block extra_css %}
+<style>
+    /* Lisibilité : grands caractères */
+    .card-body { font-size: 1.15rem; }
+    .card-body .lead { font-size: 1.35rem; }
+    .card-body h1 { font-size: 2rem; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container my-5">
@@ -9,15 +17,31 @@
             <div class="card shadow text-center">
                 <div class="card-body p-5">
                     <div class="mb-4">
+                        {% if toutes_confirmees %}
+                        <div class="icon-success mb-3">
+                            <i class="fas fa-check-circle fa-5x text-success"></i>
+                        </div>
+                        {% set par_sms = recoit_sms(premiere.telephone, premiere.email, premiere.sms) %}
+                        {% set moyen = ('par SMS et par email' if premiere.email else 'par SMS') if par_sms else 'par email' %}
+                        <h1 class="h3 mb-3">Votre table est réservée</h1>
+                        <p class="lead">
+                            Merci, {{ premiere.nom }} ! Nous vous attendons
+                            {{ 'aux dates' if reservations|length > 1 else 'à la date' }} ci-dessous.
+                            Une confirmation vous est envoyée {{ moyen }}.
+                        </p>
+                        {% else %}
                         <div class="icon-success mb-3">
                             <i class="fas fa-hourglass-half fa-5x text-warning"></i>
                         </div>
-                        <h1 class="h3 mb-3">Réservation en attente de confirmation</h1>
+                        {% set par_sms = recoit_sms(premiere.telephone, premiere.email, premiere.sms) %}
+                        {% set moyen = ('par SMS et par email' if premiere.email else 'par SMS') if par_sms else 'par email' %}
+                        <h1 class="h3 mb-3">Demande reçue, en attente de confirmation</h1>
                         <p class="lead">
                             Merci, {{ premiere.nom }} ! Votre demande a bien été enregistrée pour
                             {{ reservations|length }} date{{ 's' if reservations|length > 1 else '' }}.
-                            Notre équipe va l'examiner et vous recevrez un email dès que chaque date sera confirmée.
+                            <strong>Elle n'est pas encore confirmée</strong> : vous recevrez un message {{ moyen }} dès que notre équipe l'aura validée.
                         </p>
+                        {% endif %}
                     </div>
 
                     <div class="card border-0 bg-light mb-4">
@@ -48,17 +72,28 @@
                     <div class="alert alert-info">
                         <h3 class="h5 mb-3">Informations importantes</h3>
                         <ul class="text-start">
-                            <li>Votre réservation n'est pas encore définitive : chaque date doit être validée par notre équipe</li>
-                            <li>Vous recevrez un email par date confirmée (ou, le cas échéant, annulée)</li>
-                            <li>Pour toute question, contactez-nous au 0471/24.32.79</li>
+                            {% if not toutes_confirmees %}
+                            <li>Votre réservation n'est pas encore définitive : chaque date doit être validée par notre équipe.</li>
+                            <li>Vous recevrez {{ moyen }} un message de confirmation (ou, le cas échéant, d'annulation).</li>
+                            {% endif %}
+                            {% if premiere.email %}<li>Pas d'email ? Regardez dans le dossier « courrier indésirable » (spam).</li>{% endif %}
+                            <li>Pour toute question ou un empêchement, appelez-nous au <a href="tel:{{ tel_lien }}">{{ telephone_resto }}</a>.</li>
                         </ul>
+                    </div>
+
+                    <div class="mb-4">
+                        <a href="{{ lien_modif }}" class="btn btn-outline-primary btn-lg px-4 py-3" style="font-size: 1.3rem;">
+                            <i class="fas fa-pen me-2"></i>Modifier ou annuler ma réservation
+                        </a>
+                        {% if premiere.email %}<p class="text-muted mt-2 mb-0">Le même bouton se trouve dans votre email.</p>
+                        {% else %}<p class="text-muted mt-2 mb-0">{% if par_sms %}Vous recevrez aussi ce lien par SMS avec votre confirmation.{% else %}Pour un changement plus tard, appelez-nous au {{ telephone_resto }}.{% endif %}</p>{% endif %}
                     </div>
 
                     <div class="mt-4">
                         <a href="{{ url_for('accueil') }}" class="btn btn-primary me-2">
                             <i class="fas fa-home me-2"></i>Retour à l'accueil
                         </a>
-                        <a href="#" class="btn btn-outline-secondary">
+                        <a href="#" class="btn btn-outline-secondary" onclick="window.print(); return false;">
                             <i class="fas fa-print me-2"></i>Imprimer
                         </a>
                     </div>

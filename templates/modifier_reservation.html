@@ -49,6 +49,12 @@
                             <div class="col-md-6">
                                 <label for="heure" class="form-label">Heure</label>
                                 <select class="form-select" id="heure" name="heure" required>
+                                    {# 11:55 = heure du service. Sans cette option, enregistrer la fiche
+                                       remplaçait l'heure par 12:00 (première option de la liste). #}
+                                    <option value="11:55" {% if reservation.heure == '11:55' %}selected{% endif %}>11:55</option>
+                                    {% if reservation.heure and reservation.heure != '11:55' and not (reservation.heure[3:] in ('00', '30') and 12 <= (reservation.heure[:2]|int) <= 22) %}
+                                    <option value="{{ reservation.heure }}" selected>{{ reservation.heure }}</option>
+                                    {% endif %}
                                     {% for h in range(12, 23) %}
                                         <option value="{{ '%02d'|format(h) }}:00" {% if reservation.heure == '%02d:00'|format(h) %}selected{% endif %}>{{ '%02d'|format(h) }}:00</option>
                                         {% if h < 22 %}

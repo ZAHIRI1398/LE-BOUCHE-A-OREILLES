@@ -77,6 +77,9 @@
                     <li class="nav-item">
                         <a class="nav-link nav-link-highlight" href="{{ url_for('reservation.reserver') }}">Réserver</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('reservation.retrouver') }}">Modifier ou annuler</a>
+                    </li>
                 </ul>
                 <div class="d-flex">
                     {% if session.get('admin_logged_in') %}
@@ -125,7 +128,7 @@
                     <h5>Contact</h5>
                     <ul class="list-unstyled">
                         <li><i class="fas fa-phone me-2"></i> 0471/24.32.79</li>
-                        <li><i class="fas fa-envelope me-2"></i> stbernadette.restaurant@gmail.com</li>
+                        <li><i class="fas fa-envelope me-2"></i> <a href="mailto:{{ email_contact }}" class="text-reset">{{ email_contact }}</a></li>
                         <li><i class="fas fa-map-marker-alt me-2"></i> Square du Sacré-Coeur 2/A, 1160 Auderghem</li>
                     </ul>
                 </div>
@@ -196,7 +199,7 @@
                     </ul>
 
                     <h6 class="fw-bold mb-3 mt-4">📧 Contact</h6>
-                    <p class="text-muted">Pour toute question concernant vos données personnelles : <a href="mailto:stbernadette.restaurant@gmail.com" class="text-primary">stbernadette.restaurant@gmail.com</a></p>
+                    <p class="text-muted">Pour toute question concernant vos données personnelles : <a href="mailto:{{ email_contact }}" class="text-primary">{{ email_contact }}</a></p>
 
                     <div class="alert alert-success mt-4 mb-0">
                         <i class="fas fa-check-circle me-2"></i>

@@ -2,3 +2,10 @@
 data/*.db
 __pycache__/
 *.pyc
+
+# Secrets locaux (ne jamais publier)
+.env
+*.env
+# Bases et fichiers de test locaux
+*.db
+.pytest_cache/

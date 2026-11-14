@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Modifier ou annuler ma réservation - Le Bouche à Oreilles{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Même présentation que « Ma réservation » : grands caractères, un seul champ, un gros bouton */
+    .page-lisible { max-width: 760px; font-size: 1.25rem; line-height: 1.55; }
+    .page-lisible h1 { font-size: 2.1rem; font-weight: 700; color: #4a2f1f; }
+    .page-lisible .alert { font-size: 1.2rem; }
+    .page-lisible label { font-weight: 700; font-size: 1.3rem; }
+    .page-lisible input[type=text] { font-size: 1.6rem; height: 68px; border: 2px solid #ced4da; border-radius: 12px; }
+    .btn-envoyer { font-size: 1.5rem; padding: 1rem; border-radius: 12px; }
+    .aide-tel { font-size: 1.3rem; background: #f8f5f1; border-radius: 12px; padding: 1rem 1.25rem; }
+    .champ-piege { position: absolute; left: -9999px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-5 page-lisible">
+    <h1>Modifier ou annuler ma réservation</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    {% if envoye %}
+        <div class="alert alert-success" role="alert">
+            <strong>C'est envoyé.</strong>
+            Si nous avons une réservation à ce {{ 'cette adresse' if par_email else 'numéro' }}, vous allez recevoir
+            {% if par_email %}un email{% elif sms_actif %}un SMS (ou un email, si vous nous aviez donné votre adresse){% else %}un email à l'adresse donnée lors de la réservation{% endif %}
+            dans quelques minutes.
+        </div>
+        <p>Dans ce message, cliquez sur le lien : vous arrivez sur votre réservation, où vous pouvez
+           <strong>changer le nombre de personnes</strong> ou <strong>annuler</strong>.</p>
+        <p>Rien reçu après 10 minutes ? Regardez dans le « courrier indésirable », ou appelez-nous.</p>
+    {% else %}
+        <p>Inutile de refaire une réservation. Indiquez le <strong>numéro de GSM</strong> ou l'<strong>adresse email</strong>
+           que vous avez donnés en réservant : nous vous envoyons tout de suite un lien vers votre réservation.</p>
+        <form method="POST" action="{{ url_for('reservation.retrouver') }}" class="my-4">
+            <div class="champ-piege" aria-hidden="true">
+                <label for="site_web">Ne pas remplir ce champ</label>
+                <input type="text" id="site_web" name="site_web" tabindex="-1" autocomplete="off">
+            </div>
+            <label for="contact" class="form-label">Mon numéro de GSM ou mon adresse email</label>
+            <input type="text" class="form-control mb-3" id="contact" name="contact" placeholder="ex. 0470 12 34 56" autocomplete="tel" required>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-success btn-envoyer"><i class="fas fa-paper-plane me-2"></i>Recevoir mon lien</button>
+            </div>
+        </form>
+        <p>Le changement en ligne est possible <strong>jusqu'à la veille</strong>. Le jour même, appelez-nous.</p>
+    {% endif %}
+
+    <p class="aide-tel mt-4"><i class="fas fa-phone me-2"></i>Par téléphone :
+        <a href="tel:{{ tel_lien }}"><strong>{{ telephone_resto }}</strong></a></p>
+</div>
+{% endblock %}
