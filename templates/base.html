@@ -50,8 +50,6 @@
         .form-control:focus, .form-select:focus {
             border-color: #cf7a3e; box-shadow: 0 0 0 .25rem rgba(207, 122, 62, .25);
         }
-        .lien-equipe { color: rgba(255, 255, 255, .55); font-size: .9rem; }
-        .lien-equipe:hover { color: #fff; }
         .footer {
             background-color: #343a40;
             color: white;
@@ -101,16 +99,17 @@
                         <a class="nav-link" href="{{ url_for('reservation.retrouver') }}">Modifier ou annuler</a>
                     </li>
                 </ul>
-                {% if session.get('admin_logged_in') %}
-                <div class="d-flex gap-2">
-                    <a href="{{ url_for('afficher_toutes_reservations') }}" class="btn btn-outline-light">
-                        <i class="fas fa-list me-1"></i> Réservations
-                    </a>
-                    <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger">
-                        <i class="fas fa-sign-out-alt me-1"></i> Déconnexion
-                    </a>
+                <div class="d-flex">
+                    {% if session.get('admin_logged_in') %}
+                        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger">
+                            <i class="fas fa-sign-out-alt me-1"></i> Déconnexion
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light">
+                            <i class="fas fa-lock me-1"></i> Admin
+                        </a>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
         </div>
     </nav>
@@ -155,9 +154,6 @@
             {% endblock %}
             <div class="text-center mt-4">
                 <p class="mb-0">&copy; 2026 Le Bouche à Oreilles — Restaurant didactique de l'École Sainte-Bernadette.</p>
-                {% if not session.get('admin_logged_in') %}
-                <p class="mb-0 mt-2"><a href="{{ url_for('admin_login') }}" class="lien-equipe"><i class="fas fa-lock me-1"></i>Espace équipe</a></p>
-                {% endif %}
             </div>
         </div>
     </footer>

@@ -877,15 +877,12 @@ def test_heure_d_impression_a_l_heure_de_bruxelles(app, admin, monkeypatch):
     assert 'Imprimé le 14/11/2026 à 14:23' in page
 
 
-def test_bouton_admin_discret_pour_les_clients(app, client, admin):
-    page = client.get('/accueil').get_data(as_text=True)
-    haut, pied = page.split('<footer', 1)
-    assert '/admin/login' not in haut            # plus de bouton « Admin » dans le menu du haut
-    assert '/admin/login' in pied and 'Espace équipe' in pied
-    # Une fois connectée, l'équipe garde ses raccourcis en haut de page.
-    page = admin.get('/accueil').get_data(as_text=True)
-    haut = page.split('<footer', 1)[0]
-    assert 'Déconnexion' in haut and '/admin/reservations' in haut
+def test_bouton_admin_reste_en_haut_de_page(app, client, admin):
+    """Demande de Fred : l'équipe retrouve le bouton « Admin » là où il a toujours été."""
+    haut = client.get('/accueil').get_data(as_text=True).split('<footer', 1)[0]
+    assert '/admin/login' in haut and 'Admin' in haut
+    haut = admin.get('/accueil').get_data(as_text=True).split('<footer', 1)[0]
+    assert 'Déconnexion' in haut
 
 
 def test_bandeau_cookies_sur_une_ligne(app, client):
